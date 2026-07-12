@@ -10,11 +10,11 @@ import {
 } from "lucide-react";
 
 const categories = [
-  { icon: BookOpen, title: "Getting Started", desc: "Learn the basics of SewaGo", count: 12, color: "from-blue-50 to-blue-100", keywords: ["getting started", "setup", "begin", "new", "account", "register", "signup"] },
+  { icon: BookOpen, title: "Getting Started", desc: "Learn the basics of SewaGo", count: 13, color: "from-blue-50 to-blue-100", keywords: ["getting started", "setup", "begin", "new", "account", "register", "signup", "verify", "verified"] },
   { icon: CreditCard, title: "Payments & Billing", desc: "Manage transactions and wallets", count: 8, color: "from-green-50 to-green-100", keywords: ["payment", "wallet", "money", "transfer", "billing", "usd", "eur", "gbp", "balance"] },
   { icon: Shield, title: "Safety & Privacy", desc: "Keep your account secure", count: 10, color: "from-purple-50 to-purple-100", keywords: ["safety", "privacy", "security", "password", "secure", "data"] },
-  { icon: Users, title: "Community", desc: "Marketplace, events, and more", count: 15, color: "from-orange-50 to-orange-100", keywords: ["community", "marketplace", "event", "listing", "exchange", "giveaway", "request", "rsvp"] },
-  { icon: Settings, title: "Account Settings", desc: "Profile, notifications, preferences", count: 7, color: "from-gray-50 to-gray-100", keywords: ["settings", "profile", "notification", "preference", "theme", "appearance", "toggle"] },
+  { icon: Users, title: "Community", desc: "Marketplace, events, and more", count: 19, color: "from-orange-50 to-orange-100", keywords: ["community", "marketplace", "event", "listing", "exchange", "giveaway", "request", "rsvp", "donate", "donation"] },
+  { icon: Settings, title: "Account Settings", desc: "Profile, notifications, preferences", count: 8, color: "from-gray-50 to-gray-100", keywords: ["settings", "profile", "notification", "preference", "theme", "appearance", "toggle"] },
   { icon: MessageSquare, title: "Messaging", desc: "Chat, media sharing, notifications", count: 6, color: "from-pink-50 to-pink-100", keywords: ["message", "chat", "image", "media", "send", "conversation", "inbox"] },
 ];
 
@@ -40,6 +40,12 @@ const allFaqs = [
   { q: "How do I change my theme or appearance?", a: "Go to Settings > Appearance. Choose between Light and Dark themes, select an accent color, and adjust font size. Changes apply instantly and persist across sessions.", category: "Account Settings" },
   { q: "How do I reset my password?", a: "On the login page, click 'Forgot Password'. Enter your email address and we'll send you an OTP code. Enter the code on the verification page and create a new password. You'll be logged in automatically after resetting.", category: "Getting Started" },
   { q: "Can I have multiple listings at once?", a: "Yes! There's no limit to how many listings you can create. Each listing can have a different type (Exchange, Giveaway, Request) and category. Manage all your listings from your profile or the Marketplace page.", category: "Community" },
+  { q: "How do I make a donation?", a: "Click the Donate button on the dashboard or homepage. Enter your name, email, and donation amount in Nepali Rupees. Upload a screenshot of your payment, then submit. Our team will verify your payment and notify you once confirmed.", category: "Community" },
+  { q: "What types of listings can I create on the marketplace?", a: "You can create three types of listings — Exchange (swap items with someone), Giveaway (offer items for free), and Request (ask for something you need). Each listing supports multiple photos, a description, and category tagging.", category: "Community" },
+  { q: "How do I create an event?", a: "Go to the Events page and click '+ Create Event'. Fill in the title, description, category, date, time, and location. You can also add images and set a max attendee limit. Your event will appear in the Events feed for others to RSVP.", category: "Community" },
+  { q: "What event categories are available?", a: "Events can be tagged as Education, Technology, Health & Wellness, Community, Sports, Arts & Culture, Business, or Social. Browse by category to find events that interest you.", category: "Community" },
+  { q: "How do I get my account verified?", a: "Go to your Profile and submit your details including a valid ID card (passport, national ID, or driving license). Our team reviews submissions within 24-48 hours. Verified users get a badge and full access to post listings, create events, and donate.", category: "Getting Started" },
+  { q: "How do notifications work?", a: "You receive notifications for new messages, offers on your listings, event updates, and donation confirmations. Check the bell icon in the navbar to view all notifications.", category: "Account Settings" },
 ];
 
 const steps = [
@@ -117,7 +123,7 @@ export default function HelpPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8 p-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+    <div className="flex flex-col gap-8 py-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
       {/* Hero */}
       <div className="rounded-[24px] bg-gradient-to-br from-[#1D1B17] to-[#2a2824] p-10 text-white">
         <div className="mx-auto max-w-2xl text-center">
@@ -165,7 +171,7 @@ export default function HelpPage() {
 
       {/* How it works */}
       {!search && !activeCategory && (
-        <div className="grid grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {steps.map((step, i) => (
             <div key={i} className="flex items-center gap-4 rounded-[24px] bg-surface p-6 shadow-sm">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/20">
@@ -194,7 +200,7 @@ export default function HelpPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
             {filteredCategories.map((cat) => (
               <button
                 key={cat.title}
@@ -310,7 +316,7 @@ export default function HelpPage() {
           <h2 className="text-2xl font-normal text-text-primary mb-2">Still need help?</h2>
           <p className="text-lg text-text-muted">Our support team is here for you. Reach out anytime.</p>
         </div>
-        <div className="grid grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           <button
             onClick={() => setShowContactForm(true)}
             className="flex flex-col items-center gap-4 rounded-[20px] border border-border-default p-6 transition-all hover:border-gray-300 hover:shadow-sm cursor-pointer text-left"

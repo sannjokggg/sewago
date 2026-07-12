@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -47,6 +47,7 @@ interface PostDetail {
   user_email: string;
   created_at: string;
   comments: Comment[];
+  is_available: boolean;
 }
 
 interface SimilarPost {
@@ -88,6 +89,8 @@ export default function PostDetail() {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  const [viewerScale, setViewerScale] = useState(1);
+  const viewerRef = useRef<HTMLDivElement>(null);
 
   const [deleting, setDeleting] = useState(false);
   const [editPost, setEditPost] = useState<PostDetail | null>(null);
@@ -104,8 +107,16 @@ export default function PostDetail() {
   const [similarPosts, setSimilarPosts] = useState<SimilarPost[]>([]);
 
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [offersPage, setOffersPage] = useState(1);
+  const OFFERS_PER_PAGE = 2;
   const [offerContent, setOfferContent] = useState("");
+  const [offerImages, setOfferImages] = useState<string[]>([]);
   const [submittingOffer, setSubmittingOffer] = useState(false);
+
+  const sortedOffers = [...offers].sort((a, b) => {
+    const order: Record<string, number> = { pending: 0, accepted: 1, declined: 2 };
+    return (order[a.status] ?? 3) - (order[b.status] ?? 3);
+  });
 
   const fetchPost = async () => {
     try {
@@ -131,9 +142,32 @@ export default function PostDetail() {
 
   useEffect(() => { fetchPost(); }, [postId]);
 
+  useEffect(() => { setViewerScale(1); }, [selectedImage]);
+
+  const handleViewerWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setViewerScale((prev) => Math.min(Math.max(prev + (e.deltaY > 0 ? -0.15 : 0.15), 1), 3));
+  }, []);
+
+  const handleToggleAvailability = async (id: number, available: boolean) => {
+    try {
+      const res = await fetch(`/api/posts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_available: available }),
+      });
+      if (res.ok) {
+        setPost((prev) => prev ? { ...prev, is_available: available } : prev);
+      }
+    } catch (err) {
+      console.error("Toggle availability failed:", err);
+    }
+  };
+
   const handleOffer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!offerContent.trim()) return;
+    if (!offerContent.trim() && offerImages.length === 0) return;
     setSubmittingOffer(true);
     try {
       const res = await fetch("/api/offers", {
@@ -143,11 +177,11 @@ export default function PostDetail() {
           post_id: Number(postId),
           offer_item: offerContent,
           message: "",
-          offer_images: [],
+          offer_images: offerImages,
         }),
       });
       if (res.ok) {
-        setOfferContent(""); fetchPost();
+        setOfferContent(""); setOfferImages([]); setOffersPage(1); fetchPost();
       }
     } finally { setSubmittingOffer(false); }
   };
@@ -178,7 +212,7 @@ export default function PostDetail() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 p-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+      <div className="flex flex-col gap-6 py-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
         <div className="flex items-center justify-center py-32">
           <Loader2 size={32} className="animate-spin text-text-muted" />
         </div>
@@ -193,49 +227,54 @@ export default function PostDetail() {
   const allImages = post.images?.length > 0 ? post.images : post.image_url ? [post.image_url] : [];
 
   return (
-    <div className="flex flex-col gap-0" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
-      {/* Mobile: Full-width Image with Back + Price Overlay */}
-      <div className="relative w-full lg:hidden">
-        <div className="relative h-[380px] w-full bg-surface-alt">
+    <div className="flex flex-col lg:h-full lg:min-h-0 gap-0 lg:overflow-hidden pb-20 sm:pb-0" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+      {/* Mobile: Rounded Image with Back + Overlays */}
+      <div className="lg:hidden px-4">
+        <div className="relative w-full h-[380px] rounded-[20px] overflow-hidden bg-surface-alt shadow-sm">
           {allImages.length > 0 ? (
             <>
               <img
                 src={allImages[selectedImage]}
                 alt={post.title}
-                className="h-full w-full object-cover"
+                className={`h-full w-full object-cover ${post.is_available === false ? "opacity-60" : ""}`}
                 onClick={() => setLightbox({ src: allImages[selectedImage], alt: post.title })}
               />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/20" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30 pointer-events-none" />
             </>
           ) : (
             <div className="flex h-full items-center justify-center">
               <Icon size={80} strokeWidth={1.2} className="text-[#B0B0B0]" />
             </div>
           )}
+          {post.is_available === false && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+              <span className="rounded-full bg-red-500/90 px-5 py-2 text-sm font-bold text-white shadow-lg">Not Available</span>
+            </div>
+          )}
 
           {/* Back Button */}
           <button
             onClick={() => router.back()}
-            className="absolute left-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-surface/80 backdrop-blur-sm text-text-primary shadow-sm"
+            className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-surface/80 backdrop-blur-md text-text-primary shadow-md"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} />
           </button>
 
           {/* Price Badge */}
           {post.type === "Giveaway" && (
-            <div className="absolute bottom-4 left-4 z-10 rounded-full bg-accent px-4 py-2 shadow-sm">
-              <span className="text-lg font-bold text-text-primary">Free</span>
+            <div className="absolute bottom-3 left-3 z-10 rounded-full bg-accent px-4 py-1.5 shadow-md">
+              <span className="text-sm font-bold text-text-primary">Free</span>
             </div>
           )}
 
           {/* Image Dots */}
           {allImages.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
               {allImages.map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setSelectedImage(i)}
-                  className={`h-2 rounded-full transition-all ${selectedImage === i ? "w-6 bg-surface" : "w-2 bg-surface/50"}`}
+                  className={`h-1.5 rounded-full transition-all ${selectedImage === i ? "w-5 bg-surface" : "w-1.5 bg-surface/50"}`}
                 />
               ))}
             </div>
@@ -243,12 +282,12 @@ export default function PostDetail() {
 
           {/* Thumbnails */}
           {allImages.length > 1 && (
-            <div className="absolute bottom-4 right-4 z-10 flex gap-1.5">
+            <div className="absolute bottom-3 right-3 z-10 flex gap-1.5">
               {allImages.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setSelectedImage(i)}
-                  className={`h-[52px] w-[52px] flex-shrink-0 overflow-hidden rounded-[10px] border-2 transition-all ${
+                  className={`h-[44px] w-[44px] flex-shrink-0 overflow-hidden rounded-[8px] border-2 transition-all ${
                     selectedImage === i ? "border-white opacity-100" : "border-transparent opacity-60"
                   }`}
                 >
@@ -261,19 +300,33 @@ export default function PostDetail() {
       </div>
 
       {/* Desktop: Side-by-side Layout */}
-      <div className="hidden lg:flex justify-center w-full px-6 pt-4">
-        <div className="flex max-w-[1200px] w-full gap-8 items-start">
-          {/* Image Viewer */}
-          <div className="flex w-[560px] flex-shrink-0 flex-col gap-3">
-            <div className="relative flex h-[calc(100vh-200px)] items-center justify-center overflow-hidden rounded-[20px] bg-surface-alt">
+      <div className="hidden lg:flex w-full h-full min-h-0 px-6 py-4 overflow-hidden">
+        <div className="flex max-w-[1200px] w-full h-full min-h-0 gap-8 mx-auto">
+          {/* Image Viewer - fixed height */}
+          <div className="flex w-[520px] flex-shrink-0 flex-col gap-3 min-h-0 h-full">
+            <div ref={viewerRef} onWheel={handleViewerWheel} className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden rounded-[20px] bg-surface-alt">
               {allImages.length > 0 ? (
                 <>
                   <img
                     src={allImages[selectedImage]}
-                    alt={post.title}
-                    className="h-full w-full cursor-pointer object-cover transition-transform hover:scale-105"
-                    onClick={() => setLightbox({ src: allImages[selectedImage], alt: post.title })}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover blur-lg scale-110 opacity-40"
                   />
+                  <img
+                    src={allImages[selectedImage]}
+                    alt={post.title}
+                    className={`relative max-h-full w-full cursor-pointer object-contain transition-transform duration-200 ${post.is_available === false ? "opacity-60" : ""}`}
+                    style={{ transform: `scale(${viewerScale})` }}
+                    onClick={() => {
+                      if (viewerScale > 1) return;
+                      setLightbox({ src: allImages[selectedImage], alt: post.title });
+                    }}
+                  />
+                  {post.is_available === false && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="rounded-full bg-red-500/90 px-5 py-2 text-sm font-bold text-white shadow-lg">Not Available</span>
+                    </div>
+                  )}
                   {allImages.length > 1 && (
                     <>
                       <button
@@ -308,7 +361,7 @@ export default function PostDetail() {
               )}
             </div>
             {allImages.length > 1 && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-shrink-0">
                 {allImages.map((img, i) => (
                   <button
                     key={i}
@@ -324,9 +377,9 @@ export default function PostDetail() {
             )}
           </div>
 
-          {/* Desktop Content */}
-          <div className="flex-1 pb-8">
-            <div className="rounded-[24px] bg-surface p-6 shadow-sm">
+          {/* Desktop Content - title fixed, offers scrollable */}
+          <div className="flex-1 min-h-0 h-full flex flex-col gap-5 pb-4 overflow-hidden">
+            <div className="rounded-[24px] bg-surface p-6 shadow-sm flex-shrink-0">
               <div className="flex items-start justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`rounded-full px-3.5 py-1 text-sm font-semibold ${cfg.badge}`}>
@@ -367,6 +420,8 @@ export default function PostDetail() {
                       setEditError("");
                       setEditSaving(false);
                     }}
+                    isAvailable={post.is_available !== false}
+                    onToggleAvailability={handleToggleAvailability}
                   />
                 )}
               </div>
@@ -374,7 +429,7 @@ export default function PostDetail() {
               <p className="mt-2 text-sm leading-relaxed text-text-secondary">{post.description}</p>
               <div className="mt-4">
                 {post.type === "Exchange" && post.price && (
-                  <p className="text-xl font-semibold text-text-primary">{post.price}</p>
+                  <p className="text-sm text-text-secondary">Preferred: {post.price}</p>
                 )}
                 {post.type === "Giveaway" && (
                   <p className="text-2xl font-bold text-accent">Free</p>
@@ -385,30 +440,38 @@ export default function PostDetail() {
               </div>
             </div>
 
-            <div className="mt-5 rounded-[24px] bg-surface p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-text-primary">
+            <div className="flex-1 min-h-0 rounded-[24px] bg-surface p-6 shadow-sm flex flex-col overflow-hidden">
+              {post.is_available === false && (
+                <div className="mb-4 rounded-[14px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 flex-shrink-0">
+                  This item is no longer available.
+                </div>
+              )}
+              <h2 className="text-lg font-semibold text-text-primary flex-shrink-0">
                 Offers
                 <span className="ml-2 text-sm font-normal text-text-muted">({offers.length})</span>
               </h2>
-              {myId !== post.user_id && (
-                <form onSubmit={handleOffer} className="mt-4 flex gap-2">
-                  <input
-                    value={offerContent}
-                    onChange={(e) => setOfferContent(e.target.value)}
-                    placeholder="What are you offering?"
-                    className="flex-1 rounded-full border border-border-default bg-surface-alt px-4 py-2.5 text-sm text-text-primary outline-none placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-1 focus:ring-gray-100"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!offerContent.trim() || submittingOffer}
-                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-accent text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {submittingOffer ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2} />}
-                  </button>
+              {myId !== post.user_id && post.is_available !== false && (
+                <form onSubmit={handleOffer} className="mt-4 flex flex-col gap-3 flex-shrink-0">
+                  <div className="flex gap-2">
+                    <input
+                      value={offerContent}
+                      onChange={(e) => setOfferContent(e.target.value)}
+                      placeholder="What are you offering?"
+                      className="flex-1 rounded-full border border-border-default bg-surface-alt px-4 py-2.5 text-sm text-text-primary outline-none placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-1 focus:ring-gray-100"
+                    />
+                    <button
+                      type="submit"
+                      disabled={(!offerContent.trim() && offerImages.length === 0) || submittingOffer}
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-accent text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {submittingOffer ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2} />}
+                    </button>
+                  </div>
+                  <MultiImageUploader onUpload={setOfferImages} currentImages={offerImages} maxImages={4} />
                 </form>
               )}
-              <div className="mt-4 flex flex-col gap-3">
-                {offers.map((offer) => (
+              <div className="mt-4 flex flex-col gap-3 overflow-y-auto min-h-0 chat-scrollbar flex-1">
+                {sortedOffers.slice(0, offersPage * OFFERS_PER_PAGE).map((offer) => (
                   <div key={offer.id} className="rounded-[14px] border border-border-light bg-surface-alt p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
@@ -429,6 +492,19 @@ export default function PostDetail() {
                       </span>
                     </div>
                     <p className="mt-2 text-sm leading-relaxed text-text-secondary">{offer.offer_item}</p>
+                    {offer.offer_images && offer.offer_images.length > 0 && (
+                      <div className="mt-2 flex gap-2 flex-wrap">
+                        {offer.offer_images.map((img, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setLightbox({ src: img, alt: `Offer image ${i + 1}` })}
+                            className="h-[72px] w-[72px] flex-shrink-0 overflow-hidden rounded-[10px] border border-border-light"
+                          >
+                            <img src={img} alt="" className="h-full w-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {myId === post.user_id && (
                       <div className="mt-2.5 flex gap-2 flex-wrap">
                         {offer.status === "pending" && (
@@ -467,11 +543,19 @@ export default function PostDetail() {
                     </p>
                   </div>
                 )}
+                {offersPage * OFFERS_PER_PAGE < sortedOffers.length && (
+                  <button
+                    onClick={() => setOffersPage((p) => p + 1)}
+                    className="mt-1 w-full rounded-full border border-border-default bg-surface px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-alt"
+                  >
+                    Show more ({sortedOffers.length - offersPage * OFFERS_PER_PAGE} remaining)
+                  </button>
+                )}
               </div>
             </div>
 
             {similarPosts.length > 0 && (
-              <div className="mt-5 rounded-[24px] bg-surface p-6 shadow-sm">
+              <div className="flex-shrink-0 rounded-[24px] bg-surface p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-text-primary mb-4">Similar Items</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {similarPosts.map((item) => {
@@ -493,9 +577,9 @@ export default function PostDetail() {
                         </div>
                         <div className="mt-2">
                           <h3 className="text-sm font-semibold text-text-primary line-clamp-1">{item.title}</h3>
-                          <p className="mt-0.5 text-sm font-semibold text-text-primary">
+                          <p className="mt-0.5 text-xs text-text-secondary">
                             {item.type === "Giveaway" ? "Free" :
-                             item.type === "Exchange" ? (item.price || "Swap") : "Request"}
+                             item.type === "Exchange" ? (item.price ? `Preferred: ${item.price}` : "Swap") : "Request"}
                           </p>
                         </div>
                       </button>
@@ -509,8 +593,8 @@ export default function PostDetail() {
       </div>
 
       {/* Mobile: Content Below Image */}
-      <div className="lg:hidden p-4">
-        <div className="rounded-[24px] bg-surface p-5 shadow-sm">
+      <div className="lg:hidden p-4 pt-3">
+        <div className="rounded-[20px] bg-surface p-5 shadow-sm">
           <div className="flex items-start justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${cfg.badge}`}>
@@ -551,6 +635,8 @@ export default function PostDetail() {
                   setEditError("");
                   setEditSaving(false);
                 }}
+                isAvailable={post.is_available !== false}
+                onToggleAvailability={handleToggleAvailability}
               />
             )}
           </div>
@@ -559,9 +645,9 @@ export default function PostDetail() {
           <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">{post.description}</p>
 
           <div className="mt-3">
-            {post.type === "Exchange" && post.price && (
-              <p className="text-lg font-semibold text-text-primary">{post.price}</p>
-            )}
+                {post.type === "Exchange" && post.price && (
+                  <p className="text-sm text-text-secondary">Preferred: {post.price}</p>
+                )}
             {post.type === "Giveaway" && (
               <p className="text-xl font-bold text-accent">Free</p>
             )}
@@ -574,31 +660,39 @@ export default function PostDetail() {
 
           {/* Offers */}
           <div>
+            {post.is_available === false && (
+              <div className="mb-3 rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                This item is no longer available.
+              </div>
+            )}
             <h2 className="text-base font-semibold text-text-primary">
               Offers
               <span className="ml-2 text-xs font-normal text-text-muted">({offers.length})</span>
             </h2>
 
-            {myId !== post.user_id && (
-              <form onSubmit={handleOffer} className="mt-3 flex gap-2">
-                <input
-                  value={offerContent}
-                  onChange={(e) => setOfferContent(e.target.value)}
-                  placeholder="What are you offering?"
-                  className="flex-1 rounded-full border border-border-default bg-surface-alt px-3 py-2 text-sm text-text-primary outline-none placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-1 focus:ring-gray-100"
-                />
-                <button
-                  type="submit"
-                  disabled={!offerContent.trim() || submittingOffer}
-                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {submittingOffer ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2} />}
-                </button>
+            {myId !== post.user_id && post.is_available !== false && (
+              <form onSubmit={handleOffer} className="mt-3 flex flex-col gap-3">
+                <div className="flex gap-2">
+                  <input
+                    value={offerContent}
+                    onChange={(e) => setOfferContent(e.target.value)}
+                    placeholder="What are you offering?"
+                    className="flex-1 rounded-full border border-border-default bg-surface-alt px-3 py-2 text-sm text-text-primary outline-none placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-1 focus:ring-gray-100"
+                  />
+                  <button
+                    type="submit"
+                    disabled={(!offerContent.trim() && offerImages.length === 0) || submittingOffer}
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submittingOffer ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2} />}
+                  </button>
+                </div>
+                <MultiImageUploader onUpload={setOfferImages} currentImages={offerImages} maxImages={4} />
               </form>
             )}
 
             <div className="mt-3 flex flex-col gap-2.5">
-              {offers.map((offer) => (
+              {sortedOffers.slice(0, offersPage * OFFERS_PER_PAGE).map((offer) => (
                 <div key={offer.id} className="rounded-[12px] border border-border-light bg-surface-alt p-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -619,6 +713,19 @@ export default function PostDetail() {
                     </span>
                   </div>
                   <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">{offer.offer_item}</p>
+                  {offer.offer_images && offer.offer_images.length > 0 && (
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      {offer.offer_images.map((img, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setLightbox({ src: img, alt: `Offer image ${i + 1}` })}
+                          className="h-[60px] w-[60px] flex-shrink-0 overflow-hidden rounded-[8px] border border-border-light"
+                        >
+                          <img src={img} alt="" className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {myId === post.user_id && (
                     <div className="mt-2 flex gap-2 flex-wrap">
                       {offer.status === "pending" && (
@@ -657,6 +764,14 @@ export default function PostDetail() {
                   </p>
                 </div>
               )}
+              {offersPage * OFFERS_PER_PAGE < sortedOffers.length && (
+                <button
+                  onClick={() => setOffersPage((p) => p + 1)}
+                  className="mt-1 w-full rounded-full border border-border-default bg-surface px-4 py-2 text-xs font-medium text-text-secondary transition-all hover:bg-surface-alt"
+                >
+                  Show more ({sortedOffers.length - offersPage * OFFERS_PER_PAGE} remaining)
+                </button>
+              )}
             </div>
           </div>
 
@@ -685,9 +800,9 @@ export default function PostDetail() {
                         </div>
                         <div className="mt-2">
                           <h3 className="text-sm font-semibold text-text-primary line-clamp-1">{item.title}</h3>
-                          <p className="mt-0.5 text-sm font-semibold text-text-primary">
+                          <p className="mt-0.5 text-xs text-text-secondary">
                             {item.type === "Giveaway" ? "Free" :
-                             item.type === "Exchange" ? (item.price || "Swap") : "Request"}
+                             item.type === "Exchange" ? (item.price ? `Preferred: ${item.price}` : "Swap") : "Request"}
                           </p>
                         </div>
                       </button>
@@ -706,20 +821,20 @@ export default function PostDetail() {
 
       {/* Edit Modal */}
       {editPost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditPost(null)}>
-          <div className="relative w-full max-w-3xl rounded-[24px] bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:p-4" onClick={() => setEditPost(null)}>
+          <div className="relative w-full max-w-3xl sm:rounded-[24px] rounded-t-[24px] bg-white p-5 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setEditPost(null)}
-              className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 transition-colors hover:bg-gray-200"
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 transition-colors hover:bg-gray-200"
             >
               <X size={18} />
             </button>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Edit Listing</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-5 sm:mb-6">Edit Listing</h2>
             {editError && (
               <div className="mb-4 rounded-[16px] border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-600">{editError}</div>
             )}
-            <div className="flex gap-6">
-              <div className="flex-1 space-y-5">
+            <div className="flex flex-col sm:flex-row gap-5 sm:gap-6">
+              <div className="flex-1 space-y-4 sm:space-y-5">
                 <div>
                   <label className="mb-1 block text-sm font-semibold text-gray-800">Type</label>
                   <div className="flex gap-2">
@@ -745,7 +860,7 @@ export default function PostDetail() {
                     })}
                   </div>
                 </div>
-                <div className="grid grid-cols-[1fr_1fr] gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-semibold text-gray-800">Title</label>
                     <input
@@ -810,7 +925,7 @@ export default function PostDetail() {
                   <MultiImageUploader onUpload={setEditImages} currentImages={editImages} maxImages={4} />
                 </div>
               </div>
-              <div className="w-[260px] flex-shrink-0">
+              <div className="hidden sm:block w-[260px] flex-shrink-0">
                 <span className="text-xs font-medium text-gray-400">Preview</span>
                 <div className="mt-2 rounded-[16px] bg-gray-50 p-4">
                   <div className={`flex h-[180px] items-center justify-center overflow-hidden rounded-[12px] ${editImages.length > 0 ? "bg-gray-100" : "border border-gray-200 bg-white"}`}>
@@ -841,8 +956,8 @@ export default function PostDetail() {
                     <span className="rounded-full border border-gray-300 px-2 py-0.5 text-[10px] font-semibold text-gray-500">{editType}</span>
                     <h4 className="mt-1 text-sm font-semibold text-gray-800 line-clamp-1">{editTitle || "Title"}</h4>
                     <p className="text-[11px] text-gray-500 line-clamp-1">{editDesc || "Description..."}</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-800">
-                      {editType === "Giveaway" ? "Free" : editType === "Exchange" ? (editPrice || "Swap") : "Request"}
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      {editType === "Giveaway" ? "Free" : editType === "Exchange" ? (editPrice ? `Preferred: ${editPrice}` : "Swap") : "Request"}
                     </p>
                   </div>
                 </div>

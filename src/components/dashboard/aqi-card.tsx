@@ -49,7 +49,7 @@ export default function AqiCard() {
                 <Wind size={18} strokeWidth={1.5} className="text-text-primary" />
               </div>
               <div>
-                <p className="font-medium text-text-primary">{city.city}</p>
+                <p className="text-sm font-medium text-text-primary">{city.city}</p>
                 <p className={`text-xs font-semibold ${city.color}`}>{city.label}</p>
               </div>
             </div>

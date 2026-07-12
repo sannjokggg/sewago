@@ -34,7 +34,6 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (status === "unauthenticated") router.push("/login");
   }, [status, router]);
 
   useEffect(() => {
@@ -71,7 +70,7 @@ export default function NotificationsPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <Loader2 size={32} className="animate-spin text-accent" />
       </div>
     );
@@ -80,7 +79,7 @@ export default function NotificationsPage() {
   const unread = notifications.filter((n) => !n.is_read).length;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
+    <div className="max-w-3xl mx-auto py-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Link

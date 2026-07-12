@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import pool from "@/lib/db";
-import { generateOtp, getOtpExpiry, sendWhatsAppOtp } from "@/lib/whatsapp";
+import { generateOtp, getOtpExpiry, sendSmsOtp } from "@/lib/sms";
 import { initializeAuthTables } from "@/lib/db-init";
 
 const RATE_LIMIT_WINDOW = 10 * 60 * 1000;
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       [cleaned, hashedOtp, expiresAt]
     );
 
-    const sent = await sendWhatsAppOtp(cleaned, otp);
+    const sent = await sendSmsOtp(cleaned, otp);
 
     if (!sent) {
       return NextResponse.json(

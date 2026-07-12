@@ -20,6 +20,7 @@ const statusStyles: Record<string, string> = {
   Accepted: "bg-blue-100 text-blue-700",
   Rejected: "bg-red-100 text-red-600",
   Registered: "bg-purple-100 text-purple-700",
+  Donated: "bg-pink-100 text-pink-700",
 };
 
 export default function ActivitiesPage() {
@@ -44,6 +45,7 @@ export default function ActivitiesPage() {
     if (row.type === "post") return `Added "${row.name}" in Marketplace`;
     if (row.type === "offer") return `Made an offer on "${row.name}"`;
     if (row.type === "event") return `Registered for "${row.name}"`;
+    if (row.type === "donation") return row.name;
     return row.name;
   };
 
@@ -66,7 +68,7 @@ export default function ActivitiesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+    <div className="flex flex-col gap-6 py-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
       <div className="flex items-center gap-4">
         <Link href="/dashboard" className="flex h-10 w-10 items-center justify-center rounded-full bg-border-light hover:bg-gray-200 transition-colors">
           <ArrowLeft size={18} strokeWidth={1.5} className="text-text-secondary" />

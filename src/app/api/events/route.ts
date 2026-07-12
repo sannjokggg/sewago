@@ -15,9 +15,25 @@ async function ensureEventsTable() {
       event_time TIME,
       location VARCHAR(255),
       image_url TEXT,
+      images TEXT[] DEFAULT '{}',
+      contact_email VARCHAR(255),
+      contact_phone VARCHAR(50),
+      max_attendees INTEGER,
+      registration_link TEXT,
+      is_published BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  const cols = [
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}'`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS contact_email VARCHAR(255)`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50)`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS max_attendees INTEGER`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS registration_link TEXT`,
+  ];
+  for (const q of cols) {
+    try { await pool.query(q); } catch {}
+  }
 }
 
 export async function GET() {
@@ -27,6 +43,7 @@ export async function GET() {
       `SELECT events.*, COALESCE(users.name, 'Anonymous') AS organizer_name
        FROM events
        LEFT JOIN users ON events.user_id = users.id
+       WHERE events.is_published = TRUE
        ORDER BY events.event_date ASC`
     );
     return NextResponse.json(result.rows);
@@ -46,17 +63,34 @@ export async function POST(req: Request) {
     }
 
     const userId = (session.user as { id: string }).id;
-    const { title, description, category, event_date, event_time, location, image_url } = await req.json();
+
+    const userCheck = await pool.query(
+      "SELECT is_verified FROM users WHERE id = $1",
+      [userId]
+    );
+    const isVerified = userCheck.rows.length > 0 && userCheck.rows[0].is_verified;
+
+    const {
+      title, description, category, event_date, event_time, location,
+      image_url, images, contact_email, contact_phone, max_attendees, registration_link
+    } = await req.json();
 
     if (!title || !description || !category || !event_date) {
       return NextResponse.json({ error: "Title, description, category, and date are required" }, { status: 400 });
     }
 
+    const finalImages = images && images.length > 0 ? images : (image_url ? [image_url] : []);
+
     const result = await pool.query(
-      `INSERT INTO events (user_id, title, description, category, event_date, event_time, location, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO events (user_id, title, description, category, event_date, event_time, location, image_url, images, contact_email, contact_phone, max_attendees, registration_link, is_published)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
-      [userId, title, description, category, event_date, event_time || null, location || null, image_url || null]
+      [
+        userId, title, description, category, event_date, event_time || null,
+        location || null, finalImages[0] || null, finalImages,
+        contact_email || null, contact_phone || null, max_attendees || null, registration_link || null,
+        isVerified
+      ]
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

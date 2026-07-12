@@ -51,6 +51,19 @@ async function ensureTables() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS donations (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      amount DECIMAL(10,2) NOT NULL,
+      message TEXT,
+      screenshot_url TEXT,
+      status VARCHAR(20) DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 }
 
 function getDefaultActivities() {
@@ -66,6 +79,7 @@ function getDefaultActivities() {
     { id: "OFFER-1", name: "Old Furniture Donation", user: "Maya Tamang", icon: "🎁", status: "Pending", date: daysAgo(2.5), type: "offer" },
     { id: "POST-2", name: "Electronic Waste Collection", user: "Kiran Poudel", icon: "♻", status: "Listed", date: daysAgo(3), type: "post" },
     { id: "EVENT-2", name: "Tree Plantation Event", user: "Simran KC", icon: "📅", status: "Registered", date: daysAgo(4), type: "event" },
+    { id: "DONATION-1", name: "Donated Rs 2500 to SewaGo", user: "Suman Shrestha", icon: "💰", status: "Donated", date: daysAgo(1.2), type: "donation" },
   ];
 }
 
@@ -107,6 +121,21 @@ export async function GET(req: Request) {
        LIMIT ${showAll ? 20 : 5}`
     );
 
+    let donationsResult;
+    try {
+      donationsResult = await pool.query(
+        `SELECT donations.id, donations.amount, donations.name AS donor_name, donations.created_at,
+                COALESCE(users.name, donations.name) AS user_name
+         FROM donations
+         LEFT JOIN users ON donations.user_id = users.id
+         WHERE donations.status = 'verified'
+         ORDER BY donations.created_at DESC
+         LIMIT ${showAll ? 20 : 5}`
+      );
+    } catch {
+      donationsResult = { rows: [] };
+    }
+
     const activities = [
       ...postsResult.rows.map((r: any) => ({
         id: `POST-${r.id}`,
@@ -134,6 +163,15 @@ export async function GET(req: Request) {
         status: "Registered",
         date: r.created_at,
         type: "event",
+      })),
+      ...donationsResult.rows.map((r: any) => ({
+        id: `DONATION-${r.id}`,
+        name: `Donated Rs ${r.amount} to SewaGo`,
+        user: r.user_name,
+        icon: "💰",
+        status: "Donated",
+        date: r.created_at,
+        type: "donation",
       })),
     ];
 

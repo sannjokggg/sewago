@@ -25,7 +25,6 @@ export default function DonationsPage() {
   const [filter, setFilter] = useState("pending");
 
   useEffect(() => {
-    if (status === "unauthenticated") { router.push("/login"); return; }
   }, [status, router]);
 
   useEffect(() => {
@@ -55,14 +54,14 @@ export default function DonationsPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <Loader2 size={32} className="animate-spin text-accent" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-5xl mx-auto py-6">
       <div className="flex items-center gap-3 mb-6">
         <Shield size={24} className="text-text-primary" />
         <h1 className="text-2xl font-bold text-text-primary">Donations</h1>
@@ -115,7 +114,7 @@ export default function DonationsPage() {
                 </span>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-4">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="rounded-[14px] bg-surface-alt p-3">
                   <p className="text-xs text-text-muted">Amount</p>
                   <p className="text-lg font-bold text-text-primary">Rs {donation.amount}</p>

@@ -14,9 +14,13 @@ async function ensureOffersTable() {
       offer_item TEXT,
       offer_images TEXT,
       status VARCHAR(20) DEFAULT 'pending',
+      is_published BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  try {
+    await pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE`);
+  } catch {}
 }
 
 export async function GET(req: Request) {
@@ -33,7 +37,7 @@ export async function GET(req: Request) {
       `SELECT offers.*, users.name AS user_name, users.email AS user_email
        FROM offers
        LEFT JOIN users ON offers.user_id = users.id
-       WHERE offers.post_id = $1
+       WHERE offers.post_id = $1 AND offers.is_published = TRUE
        ORDER BY offers.created_at DESC`,
       [postId]
     );
@@ -63,6 +67,13 @@ export async function POST(req: Request) {
     }
 
     const userId = (session.user as { id: string }).id;
+
+    const userCheck = await pool.query(
+      "SELECT is_verified FROM users WHERE id = $1",
+      [userId]
+    );
+    const isVerified = userCheck.rows.length > 0 && userCheck.rows[0].is_verified;
+
     const { post_id, message, offer_item, offer_images } = await req.json();
 
     if (!post_id) {
@@ -72,9 +83,9 @@ export async function POST(req: Request) {
     const imagesJson = offer_images && offer_images.length > 0 ? JSON.stringify(offer_images) : null;
 
     const result = await pool.query(
-      `INSERT INTO offers (post_id, user_id, message, offer_item, offer_images)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [post_id, userId, message || "", offer_item || "", imagesJson]
+      `INSERT INTO offers (post_id, user_id, message, offer_item, offer_images, is_published)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [post_id, userId, message || "", offer_item || "", imagesJson, isVerified]
     );
 
     const offer = result.rows[0];

@@ -54,14 +54,14 @@ export const authOptions: NextAuthOptions = {
           );
 
           let userResult = await pool.query(
-            "SELECT id, name, email FROM users WHERE phone_number = $1",
+            "SELECT id, name, email, role, verification_status, is_verified FROM users WHERE phone_number = $1",
             [cleaned]
           );
 
           if (userResult.rows.length === 0) {
             userResult = await pool.query(
-              `INSERT INTO users (name, phone_number) VALUES ($1, $2)
-               RETURNING id, name, email`,
+              `INSERT INTO users (name, phone_number, verification_status, is_verified) VALUES ($1, $2, 'pending', FALSE)
+               RETURNING id, name, email, role, verification_status, is_verified`,
               ["User", cleaned]
             );
           }
@@ -72,6 +72,32 @@ export const authOptions: NextAuthOptions = {
             id: user.id.toString(),
             email: user.email || `${cleaned}@phone.local`,
             name: user.name,
+            role: user.role || "user",
+            verificationStatus: user.verification_status || "pending",
+            isVerified: user.is_verified || false,
+          };
+        }
+
+        if (credentials?.phone && !credentials?.otp) {
+          const cleaned = credentials.phone.replace(/\s/g, "");
+          const userResult = await pool.query(
+            "SELECT id, name, email, role, verification_status, is_verified FROM users WHERE phone_number = $1",
+            [cleaned]
+          );
+
+          if (userResult.rows.length === 0) {
+            throw new Error("No account found. Please register first.");
+          }
+
+          const user = userResult.rows[0];
+
+          return {
+            id: user.id.toString(),
+            email: user.email || `${cleaned}@phone.local`,
+            name: user.name,
+            role: user.role || "user",
+            verificationStatus: user.verification_status || "pending",
+            isVerified: user.is_verified || false,
           };
         }
 
@@ -79,9 +105,10 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Email and password required");
         }
 
-        const result = await pool.query("SELECT * FROM users WHERE email = $1", [
-          credentials.email,
-        ]);
+        const result = await pool.query(
+          "SELECT id, name, email, password, role, verification_status, is_verified FROM users WHERE email = $1",
+          [credentials.email]
+        );
 
         const user = result.rows[0];
 
@@ -103,6 +130,9 @@ export const authOptions: NextAuthOptions = {
           id: user.id.toString(),
           email: user.email,
           name: user.name,
+          role: user.role || "user",
+          verificationStatus: user.verification_status || "pending",
+          isVerified: user.is_verified || false,
         };
       },
     }),
@@ -112,33 +142,114 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async signIn({ user, account }) {
+      const isAdminEmail = user.email && user.email === process.env.ADMIN_EMAIL;
+
       if (account?.provider === "google") {
         await initializeAuthTables();
         const email = user.email;
         if (email) {
-          const existing = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
+          const existing = await pool.query(
+            "SELECT id, role, verification_status, is_verified FROM users WHERE email = $1",
+            [email]
+          );
           if (existing.rows.length === 0) {
+            const status = isAdminEmail ? "verified" : "pending";
+            const verified = isAdminEmail;
+            const role = isAdminEmail ? "admin" : "user";
             const result = await pool.query(
-              `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id`,
-              [user.name || "User", email]
+              `INSERT INTO users (name, email, verification_status, is_verified, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, role, verification_status, is_verified`,
+              [user.name || "User", email, status, verified, role]
             );
             user.id = result.rows[0].id.toString();
+            (user as { role?: string }).role = result.rows[0].role;
+            (user as { verificationStatus?: string }).verificationStatus = result.rows[0].verification_status;
+            (user as { isVerified?: boolean }).isVerified = result.rows[0].is_verified;
           } else {
             user.id = existing.rows[0].id.toString();
+            (user as { role?: string }).role = existing.rows[0].role || "user";
+            (user as { verificationStatus?: string }).verificationStatus = existing.rows[0].verification_status || "pending";
+            (user as { isVerified?: boolean }).isVerified = existing.rows[0].is_verified || false;
+          }
+
+          // Auto-promote admin email
+          if (isAdminEmail) {
+            await pool.query(
+              `UPDATE users SET role = 'admin', is_verified = TRUE, verification_status = 'verified' WHERE email = $1`,
+              [email]
+            );
+            (user as { role?: string }).role = "admin";
+            (user as { verificationStatus?: string }).verificationStatus = "verified";
+            (user as { isVerified?: boolean }).isVerified = true;
           }
         }
       }
+
+      // Auto-promote admin email for credentials login
+      if (isAdminEmail && user.id) {
+        await initializeAuthTables();
+        await pool.query(
+          `UPDATE users SET role = 'admin', is_verified = TRUE, verification_status = 'verified' WHERE id = $1`,
+          [user.id]
+        );
+        (user as { role?: string }).role = "admin";
+        (user as { verificationStatus?: string }).verificationStatus = "verified";
+        (user as { isVerified?: boolean }).isVerified = true;
+      }
+
       return true;
     },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.role = (user as { role?: string }).role || "user";
+        token.verificationStatus = (user as { verificationStatus?: string }).verificationStatus || "pending";
+        token.isVerified = (user as { isVerified?: boolean }).isVerified || false;
+      }
+      // Force admin for ADMIN_EMAIL on every token refresh
+      if (token.email && token.email === process.env.ADMIN_EMAIL) {
+        if (token.role !== "admin") {
+          token.role = "admin";
+          token.verificationStatus = "verified";
+          token.isVerified = true;
+          // Sync to DB
+          try {
+            await pool.query(
+              `UPDATE users SET role = 'admin', is_verified = TRUE, verification_status = 'verified' WHERE email = $1`,
+              [token.email]
+            );
+          } catch {}
+        }
+      }
+      // Refresh role/status from DB on each token use for real-time updates
+      if (token.id) {
+        try {
+          const result = await pool.query(
+            "SELECT role, verification_status, is_verified, first_name FROM users WHERE id = $1",
+            [token.id]
+          );
+          if (result.rows.length > 0) {
+            // Don't override admin if DB says user (admin email always wins)
+            const dbRole = result.rows[0].role || "user";
+            if (token.role === "admin" || dbRole === "admin") {
+              token.role = "admin";
+            } else {
+              token.role = dbRole;
+            }
+            token.verificationStatus = result.rows[0].verification_status || "pending";
+            token.isVerified = result.rows[0].is_verified || false;
+            token.needsProfileCompletion = !result.rows[0].first_name;
+          }
+        } catch {}
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         (session.user as { id: string }).id = token.id as string;
+        (session.user as { role?: string }).role = (token.role as string) || "user";
+        (session.user as { verificationStatus?: string }).verificationStatus = (token.verificationStatus as string) || "pending";
+        (session.user as { isVerified?: boolean }).isVerified = (token.isVerified as boolean) || false;
+        (session.user as { needsProfileCompletion?: boolean }).needsProfileCompletion = (token.needsProfileCompletion as boolean) || false;
       }
       return session;
     },

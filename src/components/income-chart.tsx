@@ -13,7 +13,7 @@ import { useState, useEffect } from "react";
 
 const GlobalBarShape = (props: any) => {
   const { x, y, width, height } = props;
-  const gap = 5;
+  const gap = 1;
   const h = Math.max(0, height - gap);
   return (
     <rect
@@ -30,7 +30,7 @@ const GlobalBarShape = (props: any) => {
 
 const NepalBarShape = (props: any) => {
   const { x, y, width, height } = props;
-  const gap = 5;
+  const gap = 1;
   const h = Math.max(0, height - gap);
   return (
     <rect
@@ -53,9 +53,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="rounded-xl border border-border-light bg-surface p-4 shadow-lg">
-        <p className="mb-2 text-sm font-semibold text-text-primary">{label}</p>
+        <p className="mb-1.5 text-sm font-semibold text-text-primary">{label}</p>
         {payload.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center gap-2 text-sm">
+          <div key={index} className="flex items-center gap-1.5 text-sm">
             <div
               className="h-3 w-3 rounded-full"
               style={{ backgroundColor: entry.color }}
@@ -84,6 +84,14 @@ const defaultData = Array.from({ length: 8 }, (_, i) => {
 
 export default function IncomeChart() {
   const [co2Data, setCo2Data] = useState(defaultData);
+  const [barSize, setBarSize] = useState(33);
+
+  useEffect(() => {
+    const check = () => setBarSize(window.innerWidth < 640 ? 18 : 33);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   useEffect(() => {
     fetch("/api/co2")
@@ -96,41 +104,41 @@ export default function IncomeChart() {
 
   return (
     <div
-      className="rounded-[24px] bg-surface p-4 shadow-sm h-full flex flex-col"
+      className="rounded-[18px] lg:rounded-[24px] bg-surface p-4 lg:p-5 shadow-sm flex flex-col h-full"
       style={{
         boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
         fontFamily: "var(--font-inter), Inter, sans-serif",
       }}
     >
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-text-primary">Monthly CO₂ Emissions</h2>
-        <p className="mt-1 text-base text-text-muted">
+      <div className="mb-3 lg:mb-4">
+        <h2 className="text-lg lg:text-2xl font-medium text-text-primary">Monthly CO₂ Emissions</h2>
+        <p className="mt-1 text-xs lg:text-base text-text-muted">
           Global CO₂ · Nepal CO₂
         </p>
       </div>
 
-      <div className="rounded-[16px] bg-surface-alt p-2 flex-1 flex flex-col">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-text-primary">
+      <div className="rounded-[14px] lg:rounded-[16px] bg-surface-alt p-3 lg:p-4 flex-1 flex flex-col">
+        <div className="mb-2 lg:mb-3 flex items-center justify-between">
+          <h3 className="text-sm lg:text-lg font-semibold text-text-primary">
             Monthly trend
           </h3>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-3.5 rounded-full bg-[#B8F25E]" />
-              <span className="text-base text-text-secondary">Global CO₂</span>
+          <div className="flex items-center gap-2 lg:gap-4">
+            <div className="flex items-center gap-1 lg:gap-2">
+              <div className="h-2.5 w-2.5 lg:h-3.5 lg:w-3.5 rounded-full bg-[#B8F25E]" />
+              <span className="text-[10px] lg:text-base text-text-secondary">Global</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-3.5 rounded-full bg-[#111111]" />
-              <span className="text-base text-text-secondary">Nepal CO₂</span>
+            <div className="flex items-center gap-1 lg:gap-2">
+              <div className="h-2.5 w-2.5 lg:h-3.5 lg:w-3.5 rounded-full bg-[#111111]" />
+              <span className="text-[10px] lg:text-base text-text-secondary">Nepal</span>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 min-h-[200px]">
+        <div className="flex-1 min-h-[180px] lg:min-h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={co2Data}
-              margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+              margin={{ top: 4, right: 4, left: -10, bottom: 0 }}
               barCategoryGap="8%"
               barGap={0}
             >
@@ -143,14 +151,14 @@ export default function IncomeChart() {
                 dataKey="month"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: "var(--text-muted)", fontSize: 14 }}
-                dy={10}
+                tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                dy={8}
               />
               <YAxis
-                width={14}
+                width={20}
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: "var(--text-muted)", fontSize: 12, textAnchor: "start" }}
+                tick={{ fill: "var(--text-muted)", fontSize: 11, textAnchor: "start" }}
                 tickFormatter={formatYAxis}
                 domain={[0, 6]}
                 ticks={[0, 1, 2, 3, 4, 5, 6]}
@@ -164,7 +172,7 @@ export default function IncomeChart() {
                 stackId="stack"
                 fill="#111111"
                 shape={<NepalBarShape />}
-                barSize={38}
+                barSize={barSize}
                 animationDuration={1000}
                 animationEasing="ease-out"
               />
@@ -173,7 +181,7 @@ export default function IncomeChart() {
                 stackId="stack"
                 fill="#B8F25E"
                 shape={<GlobalBarShape />}
-                barSize={38}
+                barSize={barSize}
                 animationDuration={1000}
                 animationEasing="ease-out"
               />

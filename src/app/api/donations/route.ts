@@ -27,8 +27,10 @@ async function ensureDonationsTable() {
   } catch {}
 }
 
-// Hardcoded admin user IDs that should receive notifications
-const ADMIN_USER_IDS = [1];
+async function getAdminUserIds(): Promise<number[]> {
+  const result = await pool.query("SELECT id FROM users WHERE role = 'admin'");
+  return result.rows.map((r: { id: number }) => r.id);
+}
 
 export async function POST(req: Request) {
   try {
@@ -49,16 +51,17 @@ export async function POST(req: Request) {
       [userId, name, email, amount, message || null, screenshot_url || null]
     );
 
-    // Notify all admin users (IDs 1..3 by convention)
+    // Notify all admin users
     await ensureNotificationsTable();
-    for (const adminId of ADMIN_USER_IDS) {
+    const adminUserIds = await getAdminUserIds();
+    for (const adminId of adminUserIds) {
       if (String(adminId) !== userId) {
         await createNotification(
           adminId,
           "new_donation",
           `${name} donated Rs ${amount}. Verify payment.`,
           result.rows[0].id,
-          "/dashboard/donations"
+          "/admin/donations"
         );
       }
     }
@@ -90,6 +93,10 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if ((session.user as { role?: string }).role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id, status } = await req.json();
     if (!id || !status) {
       return NextResponse.json({ error: "id and status required" }, { status: 400 });
@@ -101,19 +108,20 @@ export async function PATCH(req: Request) {
     );
 
     // Notify the donor that their payment was verified
-    const donationResult = await pool.query(
-      `SELECT user_id, name, email FROM donations WHERE id = $1`,
-      [id]
-    );
-    if (donationResult.rows.length > 0 && donationResult.rows[0].user_id) {
-      await createNotification(
-        donationResult.rows[0].user_id,
-        "donation_verified",
-        `Your donation of Rs has been ${status === "verified" ? "verified" : "rejected"}. Thank you!`,
-        Number(id),
-        "/dashboard"
+      const donationResult = await pool.query(
+        `SELECT user_id, name, email, amount FROM donations WHERE id = $1`,
+        [id]
       );
-    }
+      if (donationResult.rows.length > 0 && donationResult.rows[0].user_id) {
+        const donationAmount = donationResult.rows[0].amount;
+        await createNotification(
+          donationResult.rows[0].user_id,
+          "donation_verified",
+          `Your donation of Rs ${donationAmount} has been ${status === "verified" ? "verified" : "rejected"}. Thank you!`,
+          Number(id),
+          "/dashboard"
+        );
+      }
 
     return NextResponse.json({ success: true });
   } catch (error) {

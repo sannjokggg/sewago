@@ -6,12 +6,10 @@ export default function Logo() {
   return (
     <Link
       href="/"
-      className="flex w-fit items-center justify-center gap-1.5 rounded-[36px] bg-white px-4 py-2 shadow-sm"
+      className="flex w-fit items-center gap-1.5 rounded-full sm:rounded-[36px] bg-surface px-2 h-9 sm:h-14 sm:px-4"
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
-        <img src="/uploads/logo.png" alt="SewaGo" className="h-8 w-8 object-contain" />
-      </div>
-      <span className="text-[18px] font-semibold text-gray-800 whitespace-nowrap">
+      <img src="/logo.png" alt="SewaGo" className="h-7 w-7 sm:h-12 sm:w-12 object-contain" />
+      <span className="text-[15px] sm:text-[18px] font-semibold text-gray-800 whitespace-nowrap">
         SewaGo
       </span>
     </Link>

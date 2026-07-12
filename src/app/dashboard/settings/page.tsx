@@ -155,7 +155,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+    <div className="flex flex-col gap-6 py-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
       <div>
         <h1 className="text-3xl lg:text-5xl font-normal text-text-primary">Settings</h1>
         <p className="text-lg text-text-secondary">Manage your account preferences.</p>
@@ -277,7 +277,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
             <div>
               <label className="mb-1.5 block text-lg font-medium text-text-muted">Full Name</label>
               <input

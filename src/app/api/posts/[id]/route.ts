@@ -93,14 +93,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
 
-    const { title, description, type, price, category, images } = await req.json();
+    const { title, description, type, price, category, images, is_available } = await req.json();
     const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
     const fallbackImage = images && images.length > 0 ? images[0] : null;
 
     const result = await pool.query(
-      `UPDATE posts SET title = $1, description = $2, type = $3, price = $4, category = $5, image_url = $6, images = $7
-       WHERE id = $8 RETURNING *`,
-      [title, description, type, price || null, category || null, fallbackImage, imagesJson, id]
+      `UPDATE posts SET title = $1, description = $2, type = $3, price = $4, category = $5, image_url = $6, images = $7, is_available = $8
+       WHERE id = $9 RETURNING *`,
+      [title, description, type, price || null, category || null, fallbackImage, imagesJson, is_available !== undefined ? is_available : true, id]
     );
 
     const row = result.rows[0];

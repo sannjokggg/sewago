@@ -1,29 +1,63 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { signIn } from "next-auth/react";
+import { useState, useEffect, useRef } from "react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import OtpInput from "@/components/OtpInput";
+import { ImagePlus, X, Mail, CheckCircle, ArrowLeft, Loader2 } from "lucide-react";
 
-type Step = "welcome" | "phone" | "otp" | "details";
+type Step = "welcome" | "phone" | "otp" | "details" | "email";
 
 interface AuthPopupProps {
   isOpen: boolean;
   onClose: () => void;
+  redirectTo?: string;
+  initialStep?: Step;
 }
 
-export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
+export default function AuthPopup({ isOpen, onClose, redirectTo, initialStep }: AuthPopupProps) {
   const router = useRouter();
+  const targetUrl = redirectTo || "/dashboard";
   const [step, setStep] = useState<Step>("welcome");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [dob, setDob] = useState("");
+  const [address, setAddress] = useState("");
+  const [emailMode, setEmailMode] = useState<"signin" | "signup">("signin");
   const [otpSent, setOtpSent] = useState(false);
   const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [newUserId, setNewUserId] = useState<string | null>(null);
+
+  // Email OTP states
+  const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailOtp, setEmailOtp] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const [emailOtpExpiresAt, setEmailOtpExpiresAt] = useState<string | null>(null);
+  const [otpError, setOtpError] = useState("");
+
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState("");
+  const [idCardPreview, setIdCardPreview] = useState("");
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [idCardFile, setIdCardFile] = useState<File | null>(null);
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const idCardInputRef = useRef<HTMLInputElement>(null);
+  const { data: session, status } = useSession();
+  const [isGoogleCompletion, setIsGoogleCompletion] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && status === "authenticated" && session?.user) {
+      handleClose();
+    }
+  }, [isOpen, status, session]);
 
   useEffect(() => {
     if (!otpExpiresAt) return;
@@ -42,31 +76,171 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
     return () => clearInterval(interval);
   }, [otpExpiresAt]);
 
+  // Email OTP countdown
+  useEffect(() => {
+    if (!emailOtpExpiresAt) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(
+        0,
+        Math.floor((new Date(emailOtpExpiresAt).getTime() - Date.now()) / 1000)
+      );
+      setOtpCountdown(remaining);
+      if (remaining <= 0) {
+        setEmailOtpSent(false);
+        setEmailOtpExpiresAt(null);
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [emailOtpExpiresAt]);
+
   useEffect(() => {
     if (isOpen) {
-      setStep("welcome");
+      setStep(initialStep || "welcome");
+      setIsGoogleCompletion(initialStep === "details");
       setPhoneNumber("");
       setOtp("");
-      setName("");
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPassword("");
+      setDob("");
+      setAddress("");
+      setEmailMode("signin");
       setOtpSent(false);
       setOtpExpiresAt(null);
       setError("");
       setLoading(false);
       setNewUserId(null);
+      setProfilePhotoPreview("");
+      setIdCardPreview("");
+      setProfilePhotoFile(null);
+      setIdCardFile(null);
+      setEmailOtpSent(false);
+      setEmailVerified(false);
+      setEmailOtp("");
+      setEmailOtpExpiresAt(null);
+      setOtpError("");
     }
   }, [isOpen]);
 
+  const handleClose = () => {
+    onClose();
+  };
+
   if (!isOpen) return null;
+
+  const handleProfilePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Profile photo must be under 5MB.");
+      return;
+    }
+    setError("");
+    setProfilePhotoFile(file);
+    setProfilePhotoPreview(URL.createObjectURL(file));
+  };
+
+  const handleIdCard = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("ID card file must be under 10MB.");
+      return;
+    }
+    setError("");
+    setIdCardFile(file);
+    setIdCardPreview(URL.createObjectURL(file));
+  };
+
+  const handleSendEmailOtp = async () => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setOtpError("Please enter a valid email address");
+      return;
+    }
+    setOtpError("");
+    setOtpLoading(true);
+    try {
+      const res = await fetch("/api/auth/send-email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOtpError(data.error || "Failed to send code");
+        setOtpLoading(false);
+        return;
+      }
+      setEmailOtpSent(true);
+      setEmailOtpExpiresAt(data.expiresAt);
+      setOtpLoading(false);
+    } catch {
+      setOtpError("Something went wrong");
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    if (emailOtp.length !== 6) {
+      setOtpError("Please enter the 6-digit code");
+      return;
+    }
+    setOtpError("");
+    setOtpLoading(true);
+    try {
+      const res = await fetch("/api/auth/verify-email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp: emailOtp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOtpError(data.error || "Verification failed");
+        setOtpLoading(false);
+        return;
+      }
+      setEmailVerified(true);
+      setOtpLoading(false);
+    } catch {
+      setOtpError("Something went wrong");
+      setOtpLoading(false);
+    }
+  };
+
+  const buildFormData = () => {
+    const formData = new FormData();
+    formData.append("firstName", firstName);
+    formData.append("lastName", lastName);
+    formData.append("email", email);
+    formData.append("password", password);
+    formData.append("phoneNumber", phoneNumber ? `+977${phoneNumber}` : "");
+    formData.append("dob", dob);
+    formData.append("address", address);
+    if (profilePhotoFile) formData.append("profilePhoto", profilePhotoFile);
+    if (idCardFile) formData.append("idCard", idCardFile);
+    return formData;
+  };
 
   const handleGoogleLogin = async () => {
     setError("");
     setLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      await signIn("google", { callbackUrl: targetUrl });
     } catch {
       setError("Google sign-in failed");
       setLoading(false);
     }
+  };
+
+  const handlePhoneSubmit = () => {
+    setError("");
+    if (phoneNumber.length < 10) {
+      setError("Please enter a valid 10-digit phone number");
+      return;
+    }
+    setStep("details");
   };
 
   const handleSendOtp = async () => {
@@ -116,9 +290,11 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
       }
 
       setNewUserId(data.user.id);
-      setName(data.user.name === "User" ? "" : data.user.name);
+      setFirstName("");
+      setLastName("");
+      setEmail(data.user.email || "");
 
-      if (data.user.name && data.user.name !== "User") {
+      if (data.user.name && data.user.name !== "User" && data.user.email) {
         const result = await signIn("credentials", {
           phone: fullPhone,
           otp,
@@ -128,9 +304,9 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
           setError(result.error);
           setLoading(false);
         } else {
-          router.push("/dashboard");
+          router.push(targetUrl);
           router.refresh();
-          onClose();
+          handleClose();
         }
       } else {
         setStep("details");
@@ -149,26 +325,108 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
     const fullPhone = `+977${phoneNumber}`;
 
     try {
-      if (newUserId) {
-        await fetch("/api/auth/update-profile", {
+      if (isGoogleCompletion) {
+        const userId = (session?.user as { id?: string })?.id;
+        if (!userId) {
+          setError("User not found");
+          setLoading(false);
+          return;
+        }
+        
+        const formData = buildFormData();
+        formData.append("userId", userId);
+        
+        const res = await fetch("/api/auth/update-profile", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: newUserId, name }),
+          body: formData,
         });
+        
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || "Failed to update profile");
+          setLoading(false);
+          return;
+        }
+        
+        router.push(targetUrl);
+        router.refresh();
+        handleClose();
+      } else {
+        const formData = buildFormData();
+        formData.set("phoneNumber", fullPhone);
+        
+        const res = await fetch("/api/auth/register-phone", {
+          method: "POST",
+          body: formData,
+        });
+        
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || "Registration failed");
+          setLoading(false);
+          return;
+        }
+        
+        const result = await signIn("credentials", {
+          phone: fullPhone,
+          redirect: false,
+        });
+        
+        if (result?.error) {
+          setError(result.error);
+          setLoading(false);
+        } else {
+          router.push(targetUrl);
+          router.refresh();
+          handleClose();
+        }
+      }
+    } catch {
+      setError("Something went wrong");
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      if (emailMode === "signup") {
+        if (email && !emailVerified) {
+          setError("Please verify your email address first");
+          setLoading(false);
+          return;
+        }
+
+        const formData = buildFormData();
+        const res = await fetch("/api/register", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || "Registration failed");
+          setLoading(false);
+          return;
+        }
       }
 
       const result = await signIn("credentials", {
-        phone: fullPhone,
-        otp,
+        email,
+        password,
         redirect: false,
       });
+
       if (result?.error) {
         setError(result.error);
         setLoading(false);
       } else {
-        router.push("/dashboard");
+        router.push(targetUrl);
         router.refresh();
-        onClose();
+        handleClose();
       }
     } catch {
       setError("Something went wrong");
@@ -183,18 +441,20 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
     handleSendOtp();
   };
 
+  const inputClass = "w-full rounded-[12px] border border-border-default px-4 py-3 text-base outline-none transition-colors focus:border-green-500 focus:ring-1 focus:ring-green-500/20 text-text-primary bg-surface";
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
-        className="relative w-full max-w-md rounded-[28px] bg-surface p-8 shadow-2xl"
+        className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto thin-scrollbar rounded-[28px] bg-surface p-8 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-surface-alt flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-border-light transition-colors"
+          onClick={handleClose}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-surface-alt border border-border-default flex items-center justify-center text-text-primary hover:bg-border-light transition-colors z-10"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -203,24 +463,25 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
         </button>
 
         {error && (
-          <div className="mb-4 rounded-full bg-red-50 px-4 py-2 text-sm text-red-500 text-center">
+          <div className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-100 text-center">
             {error}
           </div>
         )}
 
         {step === "welcome" && (
           <div className="text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#B8F25E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-dark">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
               </svg>
             </div>
 
-            <h2 className="text-2xl font-bold text-text-primary mb-2">
+            <h2 className="text-2xl font-bold text-brand-dark mb-1">
               Start Your Journey
             </h2>
-            <p className="text-lg text-text-secondary mb-1">
-              with <span className="font-semibold text-accent">SewaGo</span>
+            <p className="text-base text-text-secondary mb-1">
+              with <span className="font-bold text-accent">SewaGo</span>
             </p>
             <p className="text-sm text-text-muted mb-8">
               Join our community and make a difference for our planet.
@@ -230,7 +491,7 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
               <button
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-3 rounded-full border border-border-default bg-surface px-4 py-3.5 text-base font-medium text-text-primary transition-colors hover:bg-surface-alt disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-3 rounded-full border border-border-default bg-surface px-4 py-3.5 text-base font-semibold text-text-primary transition-all hover:bg-surface-alt disabled:opacity-50"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -241,30 +502,381 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
                 Continue with Google
               </button>
 
-              <div className="relative flex items-center justify-center">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border-default"></div>
-                </div>
-                <span className="relative bg-surface px-4 text-sm text-text-muted">or</span>
-              </div>
+              <button
+                onClick={() => {
+                  setEmailMode("signin");
+                  setStep("email");
+                }}
+                className="w-full flex items-center justify-center gap-3 rounded-full border border-border-default bg-surface px-4 py-3.5 text-base font-semibold text-text-primary transition-all hover:bg-surface-alt disabled:opacity-50"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+                Continue with Email
+              </button>
 
               <button
                 onClick={() => setStep("phone")}
-                className="w-full flex items-center justify-center gap-3 rounded-full bg-accent px-4 py-3.5 text-base font-semibold text-text-primary transition-colors hover:bg-accent-hover disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-3 rounded-full border border-border-default bg-surface px-4 py-3.5 text-base font-semibold text-text-primary transition-all hover:bg-surface-alt disabled:opacity-50"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" />
                 </svg>
                 Continue with Phone
               </button>
             </div>
 
-            <p className="mt-6 text-xs text-text-muted">
-              By continuing, you agree to our{" "}
-              <span className="underline cursor-pointer">Terms of Service</span>
-              {" "}and{" "}
-              <span className="underline cursor-pointer">Privacy Policy</span>
+            <div className="mt-5 text-center text-sm text-text-secondary">
+              New here?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailMode("signup");
+                  setStep("email");
+                  setError("");
+                }}
+                className="font-semibold text-brand-dark hover:text-accent transition-colors"
+              >
+                Sign Up
+              </button>
+            </div>
+
+            <p className="mt-5 text-xs text-text-muted">
+              By continuing, you agree to our <span className="underline cursor-pointer">Terms of Service</span> and <span className="underline cursor-pointer">Privacy Policy</span>
             </p>
+          </div>
+        )}
+
+        {step === "email" && (
+          <div>
+            <button
+              onClick={() => { setStep("welcome"); setError(""); }}
+              className="mb-6 flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary transition-colors font-semibold"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back
+            </button>
+
+            <div className="flex border border-border-default rounded-full overflow-hidden mb-6 p-1 bg-surface-alt">
+              <button
+                type="button"
+                onClick={() => { setEmailMode("signin"); setError(""); }}
+                className={`flex-1 py-2.5 text-sm font-semibold rounded-full transition-all ${
+                  emailMode === "signin"
+                    ? "bg-accent text-brand-dark shadow-sm"
+                    : "text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmailMode("signup"); setError(""); }}
+                className={`flex-1 py-2.5 text-sm font-semibold rounded-full transition-all ${
+                  emailMode === "signup"
+                    ? "bg-accent text-brand-dark shadow-sm"
+                    : "text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            <h2 className="text-2xl font-bold text-brand-dark mb-1">
+              {emailMode === "signin" ? "Welcome Back" : "Create Account"}
+            </h2>
+            <p className="text-sm text-text-muted mb-6">
+              {emailMode === "signin"
+                ? "Sign in with your email and password"
+                : "Fill in your details to create an account"}
+            </p>
+
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              {emailMode === "signup" && (
+                <>
+                  <div className="flex flex-col items-center mb-2">
+                    <input
+                      ref={profileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfilePhoto}
+                      className="hidden"
+                    />
+                    {profilePhotoPreview ? (
+                      <div className="relative">
+                        <img
+                          src={profilePhotoPreview}
+                          alt="Profile preview"
+                          className="h-20 w-20 rounded-full object-cover border-[3px] border-accent"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfilePhotoPreview("");
+                            setProfilePhotoFile(null);
+                            if (profileInputRef.current) profileInputRef.current.value = "";
+                          }}
+                          className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md hover:bg-red-600"
+                        >
+                          <X size={14} strokeWidth={3} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => profileInputRef.current?.click()}
+                        className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full border-2 border-dashed border-border-default bg-surface-alt transition-all hover:border-accent hover:bg-accent/5"
+                      >
+                        <ImagePlus size={20} strokeWidth={1.5} className="text-text-muted" />
+                        <span className="text-[10px] font-medium text-text-muted">Photo</span>
+                      </button>
+                    )}
+                    <p className="mt-1 text-[11px] text-text-muted">Profile photo</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-semibold text-brand-dark">First Name</label>
+                      <input
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className={inputClass}
+                        placeholder="John"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Last Name</label>
+                      <input
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className={inputClass}
+                        placeholder="Doe"
+                        required
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Email Address</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setEmailVerified(false);
+                      setEmailOtpSent(false);
+                      setEmailOtp("");
+                      setOtpError("");
+                    }}
+                    className={`${inputClass} flex-1`}
+                    placeholder="name@example.com"
+                    required
+                    disabled={emailMode === "signin" || emailVerified}
+                  />
+                  {emailMode === "signup" && email && !emailVerified && !emailOtpSent && (
+                    <button
+                      type="button"
+                      onClick={handleSendEmailOtp}
+                      disabled={otpLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
+                      className="flex items-center gap-2 rounded-[12px] bg-brand-dark px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-brand-dark/90 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {otpLoading ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                      Send Code
+                    </button>
+                  )}
+                  {emailMode === "signup" && emailVerified && (
+                    <div className="flex items-center gap-2 rounded-[12px] bg-green-50 border border-green-200 px-4 py-3 text-sm font-semibold text-green-700">
+                      <CheckCircle size={16} />
+                      Verified
+                    </div>
+                  )}
+                </div>
+
+                {emailMode === "signup" && emailOtpSent && !emailVerified && (
+                  <div className="mt-3 rounded-[12px] border border-border-default bg-surface-alt p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => { setEmailOtpSent(false); setEmailOtp(""); setOtpError(""); }}
+                        className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                      >
+                        <ArrowLeft size={14} />
+                        Change email
+                      </button>
+                      <span className="text-xs text-text-muted">|</span>
+                      <span className="text-xs text-text-muted">Code sent to {email}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={emailOtp}
+                        onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        className="flex-1 rounded-[10px] border border-border-default px-3 py-2.5 text-base outline-none transition-colors focus:border-green-500 focus:ring-1 focus:ring-green-500/20 bg-surface text-text-primary text-center tracking-[6px] font-mono"
+                        placeholder="000000"
+                        maxLength={6}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyEmailOtp}
+                        disabled={otpLoading || emailOtp.length !== 6}
+                        className="flex items-center gap-1.5 rounded-[10px] bg-accent px-4 py-2.5 text-sm font-semibold text-brand-dark transition-all hover:bg-accent-hover disabled:opacity-50"
+                      >
+                        {otpLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                        Verify
+                      </button>
+                    </div>
+                    {otpError && (
+                      <p className="mt-2 text-xs text-red-500">{otpError}</p>
+                    )}
+                    <div className="mt-2 text-center">
+                      {otpCountdown > 0 ? (
+                        <p className="text-xs text-text-muted">
+                          Resend in {Math.floor(otpCountdown / 60)}:{(otpCountdown % 60).toString().padStart(2, "0")}
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleSendEmailOtp}
+                          className="text-xs font-semibold text-brand-dark hover:text-accent transition-colors"
+                        >
+                          Resend Code
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={inputClass}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+
+              {emailMode === "signup" && (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Phone Number</label>
+                    <div className="flex">
+                      <div className="flex items-center rounded-l-[12px] border border-r-0 border-border-default bg-surface-alt px-4 py-3 text-base font-medium text-text-primary">
+                        <span className="mr-1">🇳🇵</span> +977
+                      </div>
+                      <input
+                        type="tel"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        className="w-full rounded-r-[12px] border border-border-default px-4 py-3 text-base outline-none transition-colors focus:border-green-500 focus:ring-1 focus:ring-green-500/20 text-text-primary bg-surface"
+                        placeholder="98XXXXXXXX"
+                        readOnly={!!phoneNumber}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={dob}
+                      onChange={(e) => setDob(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Address</label>
+                    <textarea
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      className="w-full rounded-[12px] border border-border-default px-4 py-3 text-base outline-none transition-colors focus:border-green-500 focus:ring-1 focus:ring-green-500/20 text-text-primary bg-surface resize-none"
+                      placeholder="Street address, city, district..."
+                      rows={2}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Valid ID Card</label>
+                    <input
+                      ref={idCardInputRef}
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={handleIdCard}
+                      className="hidden"
+                    />
+                    {idCardPreview ? (
+                      <div className="relative rounded-[16px] border border-border-default p-3 bg-surface">
+                        {idCardFile?.type === "application/pdf" ? (
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-red-50 text-red-500 text-xs font-bold">PDF</div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-text-primary truncate">{idCardFile?.name}</p>
+                              <p className="text-xs text-text-muted">PDF document</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <img src={idCardPreview} alt="ID preview" className="h-24 w-full rounded-[12px] object-cover" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIdCardPreview("");
+                            setIdCardFile(null);
+                            if (idCardInputRef.current) idCardInputRef.current.value = "";
+                          }}
+                          className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md hover:bg-red-600"
+                        >
+                          <X size={14} strokeWidth={3} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => idCardInputRef.current?.click()}
+                        className="flex w-full items-center justify-center gap-2 rounded-[16px] border-2 border-dashed border-border-default bg-surface-alt px-4 py-4 transition-all hover:border-accent hover:bg-accent/5"
+                      >
+                        <ImagePlus size={18} strokeWidth={1.5} className="text-text-muted" />
+                        <span className="text-sm font-medium text-text-muted">Upload ID Card</span>
+                      </button>
+                    )}
+                    <p className="mt-1 text-[11px] text-text-muted">Passport, National ID, Driving License (Image or PDF)</p>
+                  </div>
+                </>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || (emailMode === "signup" && !!email && !emailVerified)}
+                className="w-full rounded-full bg-accent px-4 py-3.5 text-base font-semibold text-brand-dark transition-all hover:bg-accent-hover hover:shadow-md disabled:opacity-50"
+              >
+                {loading
+                  ? "Processing..."
+                  : emailMode === "signin"
+                  ? "Sign In"
+                  : email && !emailVerified
+                  ? "Verify email to continue"
+                  : "Sign Up & Continue"}
+              </button>
+              {emailMode === "signup" && email && !emailVerified && (
+                <p className="text-center text-xs text-amber-600">
+                  Please verify your email address to complete registration
+                </p>
+              )}
+            </form>
           </div>
         )}
 
@@ -272,35 +884,34 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
           <div>
             <button
               onClick={() => { setStep("welcome"); setError(""); }}
-              className="mb-6 flex items-center gap-1 text-sm text-text-muted hover:text-text-primary transition-colors"
+              className="mb-6 flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary transition-colors font-semibold"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
               Back
             </button>
 
-            <h2 className="text-2xl font-bold text-text-primary mb-1">Enter your phone</h2>
+            <h2 className="text-2xl font-bold text-brand-dark mb-1">Enter your phone</h2>
             <p className="text-sm text-text-muted mb-6">
-              We&apos;ll send you a verification code via WhatsApp
+              Enter your phone number to get started
             </p>
 
-            <form onSubmit={(e) => { e.preventDefault(); handleSendOtp(); }} className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); handlePhoneSubmit(); }} className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-text-primary">Phone Number</label>
+                <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Phone Number</label>
                 <div className="flex">
-                  <div className="flex items-center rounded-l-full border border-r-0 border-border-default bg-surface-alt px-4 py-3 text-base font-medium text-text-primary">
+                  <div className="flex items-center rounded-l-[12px] border border-r-0 border-border-default bg-surface-alt px-4 py-3 text-base font-medium text-text-primary">
                     <span className="mr-1">🇳🇵</span> +977
                   </div>
                   <input
                     type="tel"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    className="w-full rounded-r-full border border-border-default px-4 py-3 text-base outline-none focus:border-gray-300 focus:ring-1 focus:ring-gray-100"
+                    className="w-full rounded-r-[12px] border border-border-default px-4 py-3 text-base outline-none transition-colors focus:border-green-500 focus:ring-1 focus:ring-green-500/20 text-text-primary bg-surface"
                     placeholder="98XXXXXXXX"
                     required
                     autoFocus
-                    disabled={otpSent}
                   />
                 </div>
               </div>
@@ -308,9 +919,9 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
               <button
                 type="submit"
                 disabled={loading || phoneNumber.length < 10}
-                className="w-full rounded-full bg-accent px-4 py-3.5 text-base font-semibold text-text-primary transition-colors disabled:opacity-50"
+                className="w-full rounded-full bg-accent px-4 py-3.5 text-base font-semibold text-brand-dark transition-all hover:bg-accent-hover hover:shadow-md disabled:opacity-50"
               >
-                {loading ? "Sending..." : "Send OTP via WhatsApp"}
+                {loading ? "Processing..." : "Continue"}
               </button>
             </form>
           </div>
@@ -320,15 +931,15 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
           <div>
             <button
               onClick={() => { setStep("phone"); setOtp(""); setOtpSent(false); setOtpExpiresAt(null); setError(""); }}
-              className="mb-6 flex items-center gap-1 text-sm text-text-muted hover:text-text-primary transition-colors"
+              className="mb-6 flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary transition-colors font-semibold"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
               Back
             </button>
 
-            <h2 className="text-2xl font-bold text-text-primary mb-1">Verify your number</h2>
+            <h2 className="text-2xl font-bold text-brand-dark mb-1">Verify your number</h2>
             <p className="text-sm text-text-muted mb-6">
               Enter the 6-digit code sent to <span className="font-medium text-text-primary">+977{phoneNumber}</span>
             </p>
@@ -345,7 +956,7 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
                   <button
                     type="button"
                     onClick={handleResendOtp}
-                    className="text-xs font-medium text-text-primary hover:underline"
+                    className="text-xs font-semibold text-brand-dark hover:text-accent transition-colors"
                   >
                     Resend OTP
                   </button>
@@ -355,7 +966,7 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
               <button
                 type="submit"
                 disabled={loading || otp.length !== 6}
-                className="w-full rounded-full bg-accent px-4 py-3.5 text-base font-semibold text-text-primary transition-colors disabled:opacity-50"
+                className="w-full rounded-full bg-accent px-4 py-3.5 text-base font-semibold text-brand-dark transition-all hover:bg-accent-hover hover:shadow-md disabled:opacity-50"
               >
                 {loading ? "Verifying..." : "Verify & Continue"}
               </button>
@@ -366,40 +977,176 @@ export default function AuthPopup({ isOpen, onClose }: AuthPopupProps) {
         {step === "details" && (
           <div>
             <button
-              onClick={() => { setStep("otp"); setError(""); }}
-              className="mb-6 flex items-center gap-1 text-sm text-text-muted hover:text-text-primary transition-colors"
+              onClick={() => { setStep("phone"); setError(""); }}
+              className="mb-6 flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary transition-colors font-semibold"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
               Back
             </button>
 
-            <h2 className="text-2xl font-bold text-text-primary mb-1">Almost there!</h2>
+            <h2 className="text-2xl font-bold text-brand-dark mb-1">Complete Your Profile</h2>
             <p className="text-sm text-text-muted mb-6">
-              Tell us your name to complete your profile
+              Tell us about yourself to finish setting up
             </p>
 
             <form onSubmit={handleCompleteDetails} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-primary">Your Name</label>
+              <div className="flex flex-col items-center mb-2">
                 <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-full border border-border-default px-4 py-3 text-base outline-none focus:border-gray-300 focus:ring-1 focus:ring-gray-100"
-                  placeholder="Enter your name"
-                  required
-                  autoFocus
+                  ref={profileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePhoto}
+                  className="hidden"
                 />
+                {profilePhotoPreview ? (
+                  <div className="relative">
+                    <img
+                      src={profilePhotoPreview}
+                      alt="Profile preview"
+                      className="h-20 w-20 rounded-full object-cover border-[3px] border-accent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfilePhotoPreview("");
+                        setProfilePhotoFile(null);
+                        if (profileInputRef.current) profileInputRef.current.value = "";
+                      }}
+                      className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md hover:bg-red-600"
+                    >
+                      <X size={14} strokeWidth={3} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => profileInputRef.current?.click()}
+                    className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full border-2 border-dashed border-border-default bg-surface-alt transition-all hover:border-accent hover:bg-accent/5"
+                  >
+                    <ImagePlus size={20} strokeWidth={1.5} className="text-text-muted" />
+                    <span className="text-[10px] font-medium text-text-muted">Photo</span>
+                  </button>
+                )}
+                <p className="mt-1 text-[11px] text-text-muted">Your profile photo</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold text-brand-dark">First Name</label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className={inputClass}
+                    placeholder="John"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Last Name</label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className={inputClass}
+                    placeholder="Doe"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="name@example.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Date of Birth</label>
+                <input
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Address</label>
+                <textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full rounded-[12px] border border-border-default px-4 py-3 text-base outline-none transition-colors focus:border-green-500 focus:ring-1 focus:ring-green-500/20 text-text-primary bg-surface resize-none"
+                  placeholder="Street address, city, district..."
+                  rows={2}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-brand-dark">Valid ID Card</label>
+                <input
+                  ref={idCardInputRef}
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleIdCard}
+                  className="hidden"
+                />
+                {idCardPreview ? (
+                  <div className="relative rounded-[16px] border border-border-default p-3 bg-surface">
+                    {idCardFile?.type === "application/pdf" ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-red-50 text-red-500 text-xs font-bold">PDF</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-text-primary truncate">{idCardFile?.name}</p>
+                          <p className="text-xs text-text-muted">PDF document</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <img src={idCardPreview} alt="ID preview" className="h-24 w-full rounded-[12px] object-cover" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdCardPreview("");
+                        setIdCardFile(null);
+                        if (idCardInputRef.current) idCardInputRef.current.value = "";
+                      }}
+                      className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md hover:bg-red-600"
+                    >
+                      <X size={14} strokeWidth={3} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => idCardInputRef.current?.click()}
+                    className="flex w-full items-center justify-center gap-2 rounded-[16px] border-2 border-dashed border-border-default bg-surface-alt px-4 py-4 transition-all hover:border-accent hover:bg-accent/5"
+                  >
+                    <ImagePlus size={18} strokeWidth={1.5} className="text-text-muted" />
+                    <span className="text-sm font-medium text-text-muted">Upload ID Card</span>
+                  </button>
+                )}
+                <p className="mt-1 text-[11px] text-text-muted">Passport, National ID, Driving License (Image or PDF)</p>
               </div>
 
               <button
                 type="submit"
-                disabled={loading || !name.trim()}
-                className="w-full rounded-full bg-accent px-4 py-3.5 text-base font-semibold text-text-primary transition-colors disabled:opacity-50"
+                disabled={loading || !firstName.trim() || !lastName.trim() || !email.trim()}
+                className="w-full rounded-full bg-accent px-4 py-3.5 text-base font-semibold text-brand-dark transition-all hover:bg-accent-hover hover:shadow-md disabled:opacity-50"
               >
-                {loading ? "Setting up..." : "Start My Journey"}
+                {loading 
+                  ? (isGoogleCompletion ? "Saving..." : "Setting up...") 
+                  : (isGoogleCompletion ? "Save & Continue" : "Start My Journey")
+                }
               </button>
             </form>
           </div>

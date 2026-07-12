@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   ShoppingBag,
@@ -11,6 +12,7 @@ import {
   Recycle,
   Handshake,
 } from "lucide-react";
+import DonateModal from "@/components/donate-modal";
 
 const services = [
   {
@@ -64,29 +66,50 @@ const services = [
 ];
 
 export default function ServicesPage() {
+  const [showDonateModal, setShowDonateModal] = useState(false);
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 sm:gap-6">
       <div>
-        <h1 className="text-3xl font-bold text-text-primary">Services</h1>
-        <p className="text-base text-text-secondary mt-1">Everything you need to make a difference in your community.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">Services</h1>
+        <p className="text-sm sm:text-base text-text-secondary mt-1">Everything you need to make a difference in your community.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {services.map((s) => (
-          <Link
-            key={s.title}
-            href={s.href}
-            className="group flex flex-col rounded-2xl bg-surface p-5 shadow-sm border border-border-light hover:shadow-lg transition-all hover:-translate-y-0.5"
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border-default mb-4">
-              <s.icon size={20} className="text-text-primary" strokeWidth={1.5} />
-            </div>
-            <h3 className="text-base font-semibold text-text-primary">{s.title}</h3>
-            <p className="mt-1.5 text-sm text-text-secondary leading-relaxed flex-1">{s.description}</p>
-            <span className="mt-4 text-xs font-medium text-accent group-hover:underline">Learn More →</span>
-          </Link>
+          s.href === "/donate" ? (
+            <button
+              key={s.title}
+              onClick={() => setShowDonateModal(true)}
+              className="group flex flex-col rounded-2xl bg-surface p-4 sm:p-5 shadow-sm border border-border-light hover:shadow-lg transition-all hover:-translate-y-0.5 text-left w-full"
+            >
+              <div className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-xl border border-border-default mb-3 sm:mb-4">
+                <s.icon size={18} className="text-text-primary" strokeWidth={1.5} />
+              </div>
+              <h3 className="text-sm sm:text-base font-semibold text-text-primary">{s.title}</h3>
+              <p className="mt-1 sm:mt-1.5 text-xs sm:text-sm text-text-secondary leading-relaxed flex-1">{s.description}</p>
+              <span className="mt-3 sm:mt-4 text-[10px] sm:text-xs font-medium text-accent group-hover:underline">Learn More →</span>
+            </button>
+          ) : (
+            <Link
+              key={s.title}
+              href={s.href}
+              className="group flex flex-col rounded-2xl bg-surface p-4 sm:p-5 shadow-sm border border-border-light hover:shadow-lg transition-all hover:-translate-y-0.5"
+            >
+              <div className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-xl border border-border-default mb-3 sm:mb-4">
+                <s.icon size={18} className="text-text-primary" strokeWidth={1.5} />
+              </div>
+              <h3 className="text-sm sm:text-base font-semibold text-text-primary">{s.title}</h3>
+              <p className="mt-1 sm:mt-1.5 text-xs sm:text-sm text-text-secondary leading-relaxed flex-1">{s.description}</p>
+              <span className="mt-3 sm:mt-4 text-[10px] sm:text-xs font-medium text-accent group-hover:underline">Learn More →</span>
+            </Link>
+          )
         ))}
       </div>
+
+      {showDonateModal && (
+        <DonateModal onClose={() => setShowDonateModal(false)} />
+      )}
     </div>
   );
 }

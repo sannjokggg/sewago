@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import pool from "@/lib/db";
+import { createNotification } from "@/lib/notifications";
 
 async function ensureTables() {
   await pool.query(`
@@ -109,6 +110,26 @@ export async function POST(req: Request) {
       `INSERT INTO messages (conversation_id, sender_id, text, image_url) VALUES ($1, $2, $3, $4) RETURNING *`,
       [convId, userId, text || "", imageUrl || null]
     );
+
+    // Determine receiver and create notification
+    const senderId = Number(userId);
+    const convResult = await pool.query(
+      `SELECT user1_id, user2_id FROM conversations WHERE id = $1`,
+      [convId]
+    );
+    if (convResult.rows.length > 0) {
+      const { user1_id, user2_id } = convResult.rows[0];
+      const receiverId = Number(user1_id) === senderId ? Number(user2_id) : Number(user1_id);
+      const senderName = (session.user as { name?: string }).name || "Someone";
+      const preview = (text || "").slice(0, 50) || "[Image]";
+      createNotification(
+        receiverId,
+        "new_message",
+        `${senderName} sent you a message: ${preview}`,
+        result.rows[0].id,
+        `/dashboard/messages`
+      );
+    }
 
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {

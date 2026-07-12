@@ -17,7 +17,25 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "SewaGo",
   description: "Social Service Platform",
-  icons: { icon: "/logo.png" },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    other: [
+      { rel: "manifest", url: "/site.webmanifest" },
+    ],
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -31,7 +49,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${nunito.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex bg-background">
+      <body className="h-full bg-background thin-scrollbar">
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

@@ -65,33 +65,35 @@ export default function CreatePostPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
-      <div className="flex items-center gap-4">
+    <div className="flex flex-col gap-3 sm:gap-6 py-1 sm:py-2 pb-24 sm:pb-2" style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+      {/* Header */}
+      <div className="flex items-center gap-2.5 sm:gap-4">
         <Link
           href="/dashboard/marketplace"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-surface shadow-sm transition-all hover:bg-gray-100 hover:shadow-md"
+          className="flex h-8 w-8 sm:h-11 sm:w-11 items-center justify-center rounded-full bg-surface shadow-sm transition-all hover:bg-gray-100 hover:shadow-md"
         >
-          <ArrowLeft size={22} strokeWidth={2} />
+          <ArrowLeft size={16} strokeWidth={2} className="sm:w-[22px] sm:h-[22px]" />
         </Link>
         <div>
-          <h1 className="text-2xl lg:text-4xl font-normal text-text-primary">Create Listing</h1>
-          <p className="text-lg text-text-secondary">Post something to the community</p>
+          <h1 className="text-base sm:text-2xl lg:text-4xl font-normal text-text-primary">Create Listing</h1>
+          <p className="text-[11px] sm:text-lg text-text-secondary">Post something to the community</p>
         </div>
       </div>
 
-      <div className="flex gap-6 items-stretch">
+      <div className="flex gap-4 sm:gap-6 items-stretch flex-col lg:flex-row">
         <form onSubmit={handleSubmit} className="flex-1">
-          <div className="rounded-[24px] bg-surface p-6 shadow-sm h-full flex flex-col">
+          <div className="rounded-[16px] sm:rounded-[24px] bg-surface p-3 sm:p-6 shadow-sm">
             {error && (
-              <div className="mb-6 rounded-[16px] border border-red-200 bg-red-50 px-5 py-4 text-base text-red-600">
+              <div className="mb-3 sm:mb-6 rounded-[10px] sm:rounded-[16px] border border-red-200 bg-red-50 px-3 sm:px-5 py-2.5 sm:py-4 text-xs sm:text-base text-red-600">
                 {error}
               </div>
             )}
 
-            <div className="mb-6">
-              <label className="mb-1 block text-lg font-semibold text-text-primary">What are you posting?</label>
-              <p className="text-base text-text-muted">Select the type of listing</p>
-              <div className="mt-4 flex gap-3">
+            {/* Post Type */}
+            <div className="mb-4 sm:mb-6">
+              <label className="mb-0.5 sm:mb-1 block text-sm sm:text-lg font-semibold text-text-primary">What are you posting?</label>
+              <p className="text-[10px] sm:text-base text-text-muted">Select the type of listing</p>
+              <div className="mt-2.5 sm:mt-4 flex gap-1.5 sm:gap-3">
                 {postTypes.map((t) => {
                   const Icon = t.icon;
                   const isSelected = type === t.value;
@@ -100,14 +102,14 @@ export default function CreatePostPage() {
                       key={t.value}
                       type="button"
                       onClick={() => setType(t.value)}
-                      className={`flex items-center gap-3 rounded-full px-6 py-3.5 text-lg font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-1.5 sm:gap-3 rounded-full px-3 sm:px-6 py-2 sm:py-3.5 text-xs sm:text-lg font-medium transition-all duration-200 ${
                         isSelected
-                          ? "bg-surface text-text-primary shadow-md ring-2 ring-gray-300"
+                          ? "bg-surface text-text-primary shadow-md ring-1 sm:ring-2 ring-gray-300"
                           : "bg-surface-alt text-text-secondary hover:bg-gray-100 hover:text-text-primary"
                       }`}
                     >
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br ${t.gradient}`}>
-                        <Icon size={16} strokeWidth={2.5} className="text-text-secondary" />
+                      <div className={`flex h-5 w-5 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-gradient-to-br ${t.gradient}`}>
+                        <Icon size={10} strokeWidth={2.5} className="text-text-secondary sm:w-4 sm:h-4" />
                       </div>
                       {t.label}
                     </button>
@@ -116,20 +118,21 @@ export default function CreatePostPage() {
               </div>
             </div>
 
-            <div className="mb-6 grid grid-cols-[1fr_240px_260px] gap-5">
+            {/* Form Fields */}
+            <div className="mb-3 sm:mb-6 grid grid-cols-1 sm:grid-cols-[1fr_240px_260px] gap-2.5 sm:gap-4 sm:gap-5">
               <div>
-                <label className="mb-2 block text-lg font-medium text-text-primary">Title</label>
+                <label className="mb-1 sm:mb-2 block text-xs sm:text-lg font-medium text-text-primary">Title</label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-[14px] border border-border-default bg-surface-alt px-5 py-3.5 text-lg outline-none transition-all placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-2 focus:ring-gray-100"
+                  className="w-full rounded-[10px] sm:rounded-[14px] border border-border-default bg-surface-alt px-3 sm:px-5 py-2.5 sm:py-3.5 text-xs sm:text-lg outline-none transition-all placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-2 focus:ring-gray-100"
                   placeholder="e.g. MacBook Pro 2021"
                   required
                 />
               </div>
               <div>
-                <label className="mb-2 block text-lg font-medium text-text-primary">
+                <label className="mb-1 sm:mb-2 block text-xs sm:text-lg font-medium text-text-primary">
                   {type === "Exchange" ? "Want in return" : "Type"}
                 </label>
                 {type === "Exchange" ? (
@@ -137,71 +140,75 @@ export default function CreatePostPage() {
                     type="text"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
-                    className="w-full rounded-[14px] border border-border-default bg-surface-alt px-5 py-3.5 text-lg outline-none transition-all placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-2 focus:ring-gray-100"
+                    className="w-full rounded-[10px] sm:rounded-[14px] border border-border-default bg-surface-alt px-3 sm:px-5 py-2.5 sm:py-3.5 text-xs sm:text-lg outline-none transition-all placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-2 focus:ring-gray-100"
                     placeholder="e.g. Samsung case"
                   />
                 ) : (
-                  <div className="flex items-center rounded-[14px] border border-border-light bg-surface-alt px-5 py-3.5 text-lg text-text-muted">
+                  <div className="flex items-center rounded-[10px] sm:rounded-[14px] border border-border-light bg-surface-alt px-3 sm:px-5 py-2.5 sm:py-3.5 text-xs sm:text-lg text-text-muted">
                     {type === "Giveaway" ? "Free" : "Looking for this"}
                   </div>
                 )}
               </div>
               <div>
-                <label className="mb-2 block text-lg font-medium text-text-primary">Category</label>
+                <label className="mb-1 sm:mb-2 block text-xs sm:text-lg font-medium text-text-primary">Category</label>
                 <div className="relative">
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full appearance-none rounded-[14px] border border-border-default bg-surface-alt px-5 py-3.5 pr-10 text-lg outline-none transition-all focus:border-gray-300 focus:bg-surface focus:ring-2 focus:ring-gray-100"
+                    className="w-full appearance-none rounded-[10px] sm:rounded-[14px] border border-border-default bg-surface-alt px-3 sm:px-5 py-2.5 sm:py-3.5 pr-8 sm:pr-10 text-xs sm:text-lg outline-none transition-all focus:border-gray-300 focus:bg-surface focus:ring-2 focus:ring-gray-100"
                   >
                     <option value="">Select</option>
                     {categories.map((cat) => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
-                  <ChevronDown size={18} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <ChevronDown size={14} className="pointer-events-none absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-text-muted sm:w-[18px] sm:h-[18px]" />
                 </div>
               </div>
             </div>
 
-            <div className="mb-6">
-              <label className="mb-2 block text-lg font-medium text-text-primary">Description</label>
+            {/* Description */}
+            <div className="mb-3 sm:mb-6">
+              <label className="mb-1 sm:mb-2 block text-xs sm:text-lg font-medium text-text-primary">Description</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                className="w-full resize-none rounded-[14px] border border-border-default bg-surface-alt px-5 py-3.5 text-lg outline-none transition-all placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-2 focus:ring-gray-100"
+                className="w-full resize-none rounded-[10px] sm:rounded-[14px] border border-border-default bg-surface-alt px-3 sm:px-5 py-2.5 sm:py-3.5 text-xs sm:text-lg outline-none transition-all placeholder:text-[#B0B0B0] focus:border-gray-300 focus:bg-surface focus:ring-2 focus:ring-gray-100"
                 placeholder="Describe your item, condition, any details buyers should know..."
                 required
               />
             </div>
 
-            <div className="mb-6">
-              <label className="mb-2 block text-lg font-medium text-text-primary">Photos</label>
-              <p className="mb-2 text-sm text-text-muted">Up to 4 photos</p>
+            {/* Photos */}
+            <div className="mb-3 sm:mb-6">
+              <label className="mb-1 sm:mb-2 block text-xs sm:text-lg font-medium text-text-primary">Photos</label>
+              <p className="mb-1.5 sm:mb-2 text-[9px] sm:text-sm text-text-muted">Up to 4 photos</p>
               <MultiImageUploader onUpload={setImages} currentImages={images} maxImages={4} />
             </div>
 
-            <div className="flex items-center gap-4 mt-auto pt-2">
+            {/* Buttons */}
+            <div className="flex items-center gap-2.5 sm:gap-4 mt-4 sm:mt-auto pt-2">
               <Link
                 href="/dashboard/marketplace"
-                className="rounded-full border border-border-default bg-surface px-10 py-3.5 text-lg font-medium text-text-secondary transition-all hover:bg-surface-alt"
+                className="rounded-full border border-border-default bg-surface px-5 sm:px-10 py-2 sm:py-3.5 text-xs sm:text-lg font-medium text-text-secondary transition-all hover:bg-surface-alt"
               >
                 Cancel
               </Link>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center gap-2.5 rounded-full bg-accent px-12 py-3.5 text-lg font-semibold text-text-primary transition-all  disabled:opacity-50"
+                className="flex items-center gap-1.5 sm:gap-2.5 rounded-full bg-accent px-6 sm:px-12 py-2 sm:py-3.5 text-xs sm:text-lg font-semibold text-text-primary transition-all disabled:opacity-50"
               >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : null}
+                {loading ? <Loader2 size={14} className="animate-spin sm:w-[18px] sm:h-[18px]" /> : null}
                 {loading ? "Posting..." : "Post Listing"}
               </button>
             </div>
           </div>
         </form>
 
-        <div className="w-[440px] flex-shrink-0 relative">
+        {/* Live Preview - hidden on phone */}
+        <div className="hidden lg:block w-[440px] flex-shrink-0 relative">
           <span className="absolute -top-7 left-0 text-base font-medium text-text-muted">Live Preview</span>
           <div className="rounded-[24px] bg-surface p-6 shadow-sm h-full flex flex-col">
             <div className={`max-h-[540px] min-h-[540px] relative flex items-center justify-center overflow-hidden rounded-[16px] ${images.length > 0 ? "bg-surface-alt" : "border border-border-default bg-surface"}`}>
@@ -246,9 +253,9 @@ export default function CreatePostPage() {
                 {description || "Your description will appear here..."}
               </p>
               <div className="mt-3 flex items-center justify-between">
-                <span className="text-2xl font-semibold text-text-primary">
+                <span className="text-sm text-text-secondary">
                   {type === "Giveaway" ? "Free" :
-                   type === "Exchange" ? (price || "Swap") :
+                   type === "Exchange" ? (price ? `Preferred: ${price}` : "Swap") :
                    "Request"}
                 </span>
                 <span className="text-sm text-text-muted">by you</span>
@@ -257,6 +264,8 @@ export default function CreatePostPage() {
           </div>
         </div>
       </div>
+
+
     </div>
   );
 }

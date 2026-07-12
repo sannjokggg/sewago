@@ -1,7 +1,6 @@
 "use client";
 
 import { X } from "lucide-react";
-import Link from "next/link";
 
 interface LoginPromptProps {
   isOpen: boolean;
@@ -37,18 +36,24 @@ export default function LoginPrompt({ isOpen, onClose, action = "continue" }: Lo
           </p>
           
           <div className="flex flex-col gap-3">
-            <Link
-              href="/login"
+            <button
+              onClick={() => {
+                onClose();
+                setTimeout(() => window.dispatchEvent(new CustomEvent("open-auth-popup", { detail: { redirectTo: "/dashboard", initialStep: "email" } })), 100);
+              }}
               className="w-full bg-[#1a2e1a] text-white py-3 rounded-[12px] font-semibold hover:bg-[#2a3e2a] transition-colors text-center"
             >
               Sign In
-            </Link>
-            <Link
-              href="/register"
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                setTimeout(() => window.dispatchEvent(new CustomEvent("open-auth-popup", { detail: { redirectTo: "/dashboard", initialStep: "details" } })), 100);
+              }}
               className="w-full bg-[#B8F25E] text-[#1a2e1a] py-3 rounded-[12px] font-semibold hover:bg-[#a8e04e] transition-colors text-center"
             >
               Create Account
-            </Link>
+            </button>
           </div>
           
           <p className="mt-4 text-sm text-gray-500">

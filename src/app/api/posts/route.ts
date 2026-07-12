@@ -15,11 +15,19 @@ async function ensurePostsTable() {
       category VARCHAR(100),
       image_url TEXT,
       images TEXT,
+      is_published BOOLEAN DEFAULT TRUE,
+      is_available BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
   try {
     await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS images TEXT`);
+  } catch {}
+  try {
+    await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE`);
+  } catch {}
+  try {
+    await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_available BOOLEAN DEFAULT TRUE`);
   } catch {}
 }
 
@@ -30,6 +38,7 @@ export async function GET() {
       `SELECT posts.*, COALESCE(users.name, 'Anonymous') AS user_name
        FROM posts
        LEFT JOIN users ON posts.user_id = users.id
+       WHERE posts.is_published = TRUE
        ORDER BY posts.created_at DESC`
     );
     const rows = result.rows.map((row) => {
@@ -57,6 +66,13 @@ export async function POST(req: Request) {
     }
 
     const userId = (session.user as { id: string }).id;
+
+    const userCheck = await pool.query(
+      "SELECT is_verified FROM users WHERE id = $1",
+      [userId]
+    );
+    const isVerified = userCheck.rows.length > 0 && userCheck.rows[0].is_verified;
+
     const { title, description, type, price, category, image_url, images } = await req.json();
 
     if (!title || !description || !type) {
@@ -68,14 +84,15 @@ export async function POST(req: Request) {
     const fallbackImage = imagesArray.length > 0 ? imagesArray[0] : null;
 
     const result = await pool.query(
-      `INSERT INTO posts (user_id, title, description, type, price, category, image_url, images)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO posts (user_id, title, description, type, price, category, image_url, images, is_published)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [userId, title, description, type, price || null, category || null, fallbackImage, imagesJson]
+      [userId, title, description, type, price || null, category || null, fallbackImage, imagesJson, isVerified]
     );
 
     const row = result.rows[0];
     row.images = imagesArray;
+    row.is_published = isVerified;
 
     return NextResponse.json(row, { status: 201 });
   } catch (error) {

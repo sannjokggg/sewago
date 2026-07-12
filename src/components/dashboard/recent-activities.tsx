@@ -20,10 +20,11 @@ const statusStyles: Record<string, string> = {
   Accepted: "bg-blue-100 text-blue-700",
   Rejected: "bg-red-100 text-red-600",
   Registered: "bg-purple-100 text-purple-700",
+  Donated: "bg-pink-100 text-pink-700",
 };
 
-const typeFilters = ["All", "Marketplace", "Offers", "Events"] as const;
-const statusFilters = ["All", "Listed", "Pending", "Accepted", "Registered"] as const;
+const typeFilters = ["All", "Marketplace", "Offers", "Events", "Donations"] as const;
+const statusFilters = ["All", "Listed", "Pending", "Accepted", "Registered", "Donated"] as const;
 
 export default function RecentActivities() {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -45,6 +46,7 @@ export default function RecentActivities() {
     if (row.type === "post") return `Added "${row.name}" in Marketplace`;
     if (row.type === "offer") return `Made an offer on "${row.name}"`;
     if (row.type === "event") return `Registered for "${row.name}"`;
+    if (row.type === "donation") return row.name;
     return row.name;
   };
 
@@ -70,19 +72,19 @@ export default function RecentActivities() {
     return activities.filter((row) => {
       const desc = getDescription(row);
       const matchesSearch = !searchQuery || desc.toLowerCase().includes(searchQuery.toLowerCase()) || row.user.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = typeFilter === "All" || row.type === typeFilter.slice(0, -1).toLowerCase() || (typeFilter === "Marketplace" && row.type === "post");
+      const matchesType = typeFilter === "All" || row.type === typeFilter.slice(0, -1).toLowerCase() || (typeFilter === "Marketplace" && row.type === "post") || (typeFilter === "Donations" && row.type === "donation");
       const matchesStatus = statusFilter === "All" || row.status === statusFilter;
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [activities, searchQuery, typeFilter, statusFilter]);
 
   return (
-    <div className="flex h-full flex-col rounded-[24px] bg-surface p-6 shadow-sm">
+    <div className="flex h-full flex-col rounded-[24px] bg-surface p-6 shadow-sm max-h-[452px]">
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-medium text-text-muted">Recent Activities</h3>
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
               placeholder="Search..."
@@ -91,8 +93,8 @@ export default function RecentActivities() {
               className="w-52 rounded-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-4 text-sm text-text-secondary placeholder:text-text-muted focus:border-[#B8F25E] focus:outline-none"
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary">
-                <X size={14} />
+              <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary">
+                <X size={12} />
               </button>
             )}
           </div>
@@ -102,7 +104,7 @@ export default function RecentActivities() {
               className="flex items-center gap-1.5 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-gray-50 transition-colors"
             >
               <SlidersHorizontal size={16} />
-              Filter
+              <span>Filter</span>
               {(typeFilter !== "All" || statusFilter !== "All") && (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#B8F25E] text-xs font-bold text-text-primary">
                   {(typeFilter !== "All" ? 1 : 0) + (statusFilter !== "All" ? 1 : 0)}
@@ -167,7 +169,8 @@ export default function RecentActivities() {
       </div>
 
       <div className="mt-6 flex-1 overflow-auto">
-        <table className="w-full text-left text-sm">
+        {/* Desktop table */}
+        <table className="w-full text-left text-sm hidden sm:table">
           <thead>
             <tr className="text-text-muted text-xs uppercase tracking-wider">
               <th className="pb-4 pr-4 font-medium">ID</th>
@@ -205,6 +208,32 @@ export default function RecentActivities() {
             )}
           </tbody>
         </table>
+
+        {/* Mobile card list */}
+        <div className="sm:hidden space-y-2">
+          {filteredActivities.length === 0 ? (
+            <div className="py-8 text-center text-text-muted text-xs">
+              No activities match your filters
+            </div>
+          ) : (
+            filteredActivities.map((row) => (
+              <div key={row.id} className="rounded-xl border border-border-light bg-surface-alt p-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium text-text-primary truncate">{getDescription(row)}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-[9px] text-text-muted">{row.user}</span>
+                      <span className={`inline-block rounded-full px-1.5 py-0.5 text-[8px] font-semibold ${statusStyles[row.status] || "bg-gray-100 text-gray-600"}`}>
+                        {row.status}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[8px] text-text-muted whitespace-nowrap">{formatDateTime(row.date)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       <div className="mt-4 text-center">

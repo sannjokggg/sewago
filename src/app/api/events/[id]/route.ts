@@ -42,12 +42,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
 
-    const { title, description, category, event_date, event_time, location, image_url } = await req.json();
+    const {
+      title, description, category, event_date, event_time, location,
+      image_url, images, contact_email, contact_phone, max_attendees, registration_link
+    } = await req.json();
+
+    const finalImages = images && images.length > 0 ? images : (image_url ? [image_url] : []);
 
     const result = await pool.query(
-      `UPDATE events SET title = $1, description = $2, category = $3, event_date = $4, event_time = $5, location = $6, image_url = $7
-       WHERE id = $8 RETURNING *`,
-      [title, description, category, event_date, event_time || null, location || null, image_url || null, id]
+      `UPDATE events SET title = $1, description = $2, category = $3, event_date = $4, event_time = $5, location = $6, image_url = $7, images = $8, contact_email = $9, contact_phone = $10, max_attendees = $11, registration_link = $12
+       WHERE id = $13 RETURNING *`,
+      [
+        title, description, category, event_date, event_time || null,
+        location || null, finalImages[0] || null, finalImages,
+        contact_email || null, contact_phone || null, max_attendees || null, registration_link || null,
+        id
+      ]
     );
 
     return NextResponse.json(result.rows[0]);
