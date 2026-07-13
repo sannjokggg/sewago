@@ -358,6 +358,17 @@ export default function AuthPopup({ isOpen, onClose, redirectTo, initialStep }: 
           return;
         }
 
+        const missingFields: string[] = [];
+        if (!firstName || !firstName.trim()) missingFields.push("First name");
+        if (!lastName || !lastName.trim()) missingFields.push("Last name");
+        if (!password) missingFields.push("Password");
+
+        if (missingFields.length > 0) {
+          setError(`Please enter your ${missingFields.join(", ")}`);
+          setLoading(false);
+          return;
+        }
+
         const otpRes = await fetch("/api/auth/send-email-otp", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -390,6 +401,18 @@ export default function AuthPopup({ isOpen, onClose, redirectTo, initialStep }: 
       if (emailMode === "signup") {
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           setError("Please enter a valid email address");
+          setLoading(false);
+          return;
+        }
+
+        const missingFields: string[] = [];
+        if (!firstName || !firstName.trim()) missingFields.push("First name");
+        if (!lastName || !lastName.trim()) missingFields.push("Last name");
+        if (!password) missingFields.push("Password");
+        if (!phoneNumber) missingFields.push("Phone number");
+
+        if (missingFields.length > 0) {
+          setError(`Please enter your ${missingFields.join(", ")}`);
           setLoading(false);
           return;
         }
@@ -445,6 +468,20 @@ export default function AuthPopup({ isOpen, onClose, redirectTo, initialStep }: 
     }
 
     const fullPhone = phoneNumber ? `+977${phoneNumber}` : "";
+
+    // Validate required fields before submitting
+    const emptyFields: string[] = [];
+    if (!firstName || !firstName.trim()) emptyFields.push("First name");
+    if (!lastName || !lastName.trim()) emptyFields.push("Last name");
+    if (!email || !email.trim()) emptyFields.push("Email");
+    if (!password) emptyFields.push("Password");
+    if (!phoneNumber) emptyFields.push("Phone number");
+
+    if (emptyFields.length > 0) {
+      setError(`Please enter your ${emptyFields.join(", ")}`);
+      setLoading(false);
+      return;
+    }
 
     try {
       const verifyRes = await fetch("/api/auth/verify-email-otp", {
